@@ -3,6 +3,9 @@
     "title": "basic",
     "packages": [
       "example.com/basic"
+    ],
+    "domainPackages": [
+      "example.com/basic"
     ]
   },
   "aggregates": [
@@ -362,7 +365,7 @@
       "kind": "service"
     }
   ],
-  "unclassifiedTotal": 4,
+  "unclassifiedTotal": 2,
   "candidates": [
     {
       "name": "Shipment",

@@ -63,6 +63,11 @@ half means much alone, and a type declaration states neither.
 - Drag to pan, wheel to zoom, `f` to fit on screen
 - Hover a truncated doc line or a method to read the full comment
 
+Passing a wide pattern is safe. Only the packages holding aggregates are
+treated as the domain, so use cases and repository implementations stay out
+of the model — otherwise three types named `ConditionRepository` would land
+on the same diagram, one from the domain and two from infrastructure.
+
 Use `-format json` to get just the analysis.
 
 ### Starting from nothing
@@ -132,7 +137,8 @@ infers the rest.
 | Unclassified | Types no aggregate root can reach. Grouped by what their structure says — interfaces, all-exported structs, fieldless structs — and folded so a service and its helpers read as one entry |
 | Methods | Exported methods with their signatures, and their doc comments on hover |
 | Invariants | The rules a constructor or validating method enforces, read from the errors it returns. Wrapped errors are skipped, and the lead-in every message repeats is dropped |
-| Services | Types outside every aggregate whose methods take or return one — repositories, domain services, policies. Drawn beside the aggregates they work on, behind a toggle since there are usually more of them than aggregates |
+| Services | Types **in the domain layer** outside every aggregate whose methods take or return one — repositories, domain services, policies. Drawn beside the aggregates they work on, behind a toggle since there are usually more of them than aggregates |
+| The domain layer | The packages holding aggregates. Anything analyzed outside them is an application or infrastructure concern and stays out of the diagram, so a wide pattern like `./internal/...` gives the same model as a narrow one |
 | Constants | Typed constants, in declaration order, since that order usually carries meaning. The literal is dropped when the name already says it (`ChestUpper` covers `"CHEST_UPPER"`) |
 
 `//ddd:id for=Order` states the pairing when naming departs from the convention.

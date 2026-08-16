@@ -39,6 +39,9 @@ type Meta struct {
 	Title string `json:"title"`
 	// Packages lists the import paths that were analyzed.
 	Packages []string `json:"packages"`
+	// DomainPackages lists the packages that hold aggregates. Types outside
+	// them are not part of the model and are left out of the diagram.
+	DomainPackages []string `json:"domainPackages,omitempty"`
 }
 
 // Aggregate is a type marked with //ddd:aggregate together with

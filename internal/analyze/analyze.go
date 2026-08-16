@@ -572,11 +572,7 @@ func (a *analyzer) build() *model.Graph {
 	}
 
 	g.Services, g.Unclassified = a.outside(reached)
-	for key, d := range a.types {
-		if !d.isAggregate && !reached[key] && !a.identity[key] {
-			g.UnclassifiedTotal++
-		}
-	}
+	g.UnclassifiedTotal = countUnclassified(g.Unclassified)
 	g.Candidates = a.candidates()
 
 	sort.Slice(g.Aggregates, func(i, j int) bool { return g.Aggregates[i].Name < g.Aggregates[j].Name })
@@ -601,9 +597,19 @@ func (a *analyzer) build() *model.Graph {
 // A domain service that drags in six helpers should read as one entry, not
 // as seven equal names in a flat list.
 func (a *analyzer) outside(reached map[string]bool) ([]model.Service, []model.Unclassified) {
+	// The packages holding aggregates are the domain layer, by definition of
+	// where the markers are. With nothing marked yet there is no layer to
+	// speak of, so everything stays in scope and the candidate list can do
+	// its job.
+	domain := map[string]bool{}
+	for _, agg := range a.aggregate {
+		domain[agg.pkgPath] = true
+	}
+	inDomain := func(d *declared) bool { return len(domain) == 0 || domain[d.pkgPath] }
+
 	set := map[string]*declared{}
 	for key, d := range a.types {
-		if d.isAggregate || reached[key] || a.identity[key] {
+		if d.isAggregate || reached[key] || a.identity[key] || !inDomain(d) {
 			continue
 		}
 		set[key] = d
@@ -612,6 +618,12 @@ func (a *analyzer) outside(reached map[string]bool) ([]model.Service, []model.Un
 	// A type whose methods take or return an aggregate is doing work on the
 	// domain, so it is drawn beside the aggregates rather than left in a
 	// list of things that did not fit.
+	//
+	// Only within the domain layer, though. A use case coordinating an
+	// aggregate is an application concern, and a repository implementation
+	// is infrastructure; neither is part of the model, and drawing them
+	// alongside would put three identically named ConditionRepository boxes
+	// on one diagram.
 	var services []model.Service
 	for key, d := range set {
 		touches := a.touches(d)
@@ -859,6 +871,15 @@ func kindOrder(k model.UnclassifiedKind) int {
 	}
 }
 
+// countUnclassified totals the entries and everything folded under them.
+func countUnclassified(list []model.Unclassified) int {
+	n := 0
+	for _, u := range list {
+		n += 1 + len(u.Members)
+	}
+	return n
+}
+
 // candidates suggests where a //ddd:aggregate marker might go, for someone
 // who has not marked anything yet.
 //
@@ -913,7 +934,17 @@ func (a *analyzer) meta() model.Meta {
 	if i := strings.LastIndex(title, "/"); i >= 0 && i < len(title)-1 {
 		title = title[i+1:]
 	}
-	return model.Meta{Title: title, Packages: pkgs}
+	domain := map[string]bool{}
+	for _, agg := range a.aggregate {
+		domain[agg.pkgPath] = true
+	}
+	domainPkgs := make([]string, 0, len(domain))
+	for p := range domain {
+		domainPkgs = append(domainPkgs, p)
+	}
+	sort.Strings(domainPkgs)
+
+	return model.Meta{Title: title, Packages: pkgs, DomainPackages: domainPkgs}
 }
 
 // commonPrefix returns the shared leading segments of the given paths.

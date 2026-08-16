@@ -3,6 +3,9 @@
     "title": "deep",
     "packages": [
       "example.com/deep"
+    ],
+    "domainPackages": [
+      "example.com/deep"
     ]
   },
   "aggregates": [

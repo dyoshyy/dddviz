@@ -94,6 +94,13 @@ func run() error {
 	}
 	if len(graph.Aggregates) == 0 {
 		reportNoAggregates(os.Stderr, graph)
+	} else if len(graph.Meta.Packages) > len(graph.Meta.DomainPackages) {
+		// Types outside the packages holding aggregates are application or
+		// infrastructure concerns, not part of the model. Say so rather than
+		// leaving someone to wonder where their use cases went.
+		fmt.Fprintf(os.Stderr,
+			"dddviz: aggregates live in %d of %d analyzed packages; types elsewhere are not part of the model\n",
+			len(graph.Meta.DomainPackages), len(graph.Meta.Packages))
 	}
 	return nil
 }
