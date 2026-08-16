@@ -1,0 +1,159 @@
+{
+  "aggregates": [
+    {
+      "name": "Customer",
+      "pkg": "example.com/basic",
+      "pos": "shop.go:54",
+      "idType": "CustomerID",
+      "members": [
+        {
+          "name": "Money",
+          "pkg": "example.com/basic",
+          "pos": "shop.go:41",
+          "kind": "vo",
+          "fields": [
+            {
+              "name": "amount",
+              "type": "int64"
+            },
+            {
+              "name": "currency",
+              "type": "string"
+            }
+          ],
+          "depth": 1
+        }
+      ],
+      "fields": [
+        {
+          "name": "id",
+          "type": "CustomerID"
+        },
+        {
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "name": "balance",
+          "type": "Money"
+        }
+      ]
+    },
+    {
+      "name": "Order",
+      "pkg": "example.com/basic",
+      "pos": "shop.go:5",
+      "idType": "OrderID",
+      "members": [
+        {
+          "name": "Money",
+          "pkg": "example.com/basic",
+          "pos": "shop.go:41",
+          "kind": "vo",
+          "fields": [
+            {
+              "name": "amount",
+              "type": "int64"
+            },
+            {
+              "name": "currency",
+              "type": "string"
+            }
+          ],
+          "depth": 1
+        },
+        {
+          "name": "OrderLine",
+          "pkg": "example.com/basic",
+          "pos": "shop.go:20",
+          "kind": "vo",
+          "fields": [
+            {
+              "name": "sku",
+              "type": "SKU"
+            },
+            {
+              "name": "qty",
+              "type": "Quantity"
+            }
+          ],
+          "depth": 1
+        },
+        {
+          "name": "Shipment",
+          "pkg": "example.com/basic",
+          "pos": "shop.go:31",
+          "kind": "entity",
+          "fields": [
+            {
+              "name": "id",
+              "type": "ShipmentID"
+            },
+            {
+              "name": "carrier",
+              "type": "string"
+            }
+          ],
+          "depth": 1
+        },
+        {
+          "name": "Quantity",
+          "pkg": "example.com/basic",
+          "pos": "shop.go:51",
+          "kind": "vo",
+          "fields": [],
+          "depth": 2
+        },
+        {
+          "name": "SKU",
+          "pkg": "example.com/basic",
+          "pos": "shop.go:49",
+          "kind": "vo",
+          "fields": [],
+          "depth": 2
+        }
+      ],
+      "fields": [
+        {
+          "name": "id",
+          "type": "OrderID"
+        },
+        {
+          "name": "customer",
+          "type": "CustomerID"
+        },
+        {
+          "name": "lines",
+          "type": "[]OrderLine"
+        },
+        {
+          "name": "shipment",
+          "type": "*Shipment"
+        },
+        {
+          "name": "total",
+          "type": "Money"
+        }
+      ]
+    }
+  ],
+  "references": [
+    {
+      "from": "Order",
+      "to": "Customer",
+      "via": "Order.customer CustomerID"
+    }
+  ],
+  "unclassified": [
+    {
+      "name": "PlaceOrderRequest",
+      "pkg": "example.com/basic",
+      "pos": "shop.go:70"
+    },
+    {
+      "name": "PricingService",
+      "pkg": "example.com/basic",
+      "pos": "shop.go:65"
+    }
+  ]
+}
