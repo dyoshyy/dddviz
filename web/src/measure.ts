@@ -2,7 +2,15 @@
 // DOM, because the layout has to be decided before anything is drawn.
 // The font is monospace, so counting is close enough.
 
-import type { Aggregate, BoxLike, EnumValue, Field, Member, Method } from "./model";
+import type {
+  Aggregate,
+  BoxLike,
+  EnumValue,
+  Field,
+  Invariant,
+  Member,
+  Method,
+} from "./model";
 
 export const CHAR = 6.7; // width of the 11px monospace face
 export const TITLE_CHAR = 7.4; // 12-13px sans-serif
@@ -86,6 +94,37 @@ export function wrapValues(values: EnumValue[], chars: number): string[] {
   return lines;
 }
 
+/**
+ * Break one rule across as many lines as it needs.
+ *
+ * Rules are sentences, often in a language without spaces, so they wrap on
+ * character count rather than on word boundaries.
+ */
+export function wrapText(text: string, chars: number): string[] {
+  const lines: string[] = [];
+  let cur = "";
+  let used = 0;
+
+  for (const ch of text) {
+    const add = ch.charCodeAt(0) > 0x1100 ? 2 : 1;
+    if (used + add > chars && cur) {
+      lines.push(cur);
+      cur = "";
+      used = 0;
+    }
+    cur += ch;
+    used += add;
+  }
+  if (cur) lines.push(cur);
+  return lines;
+}
+
+/** Every rule of a type, already broken into lines. */
+export function wrapInvariants(inv: Invariant[], chars: number): string[][] {
+  // The bullet and its indent are part of the line budget.
+  return inv.map((i) => wrapText(i.text, Math.max(8, chars - 2)));
+}
+
 export function bodyHeight(t: BoxLike, boxWidth: number): number {
   let h = 0;
   if (t.doc) h += DOC_ROW + 4;
@@ -94,12 +133,18 @@ export function bodyHeight(t: BoxLike, boxWidth: number): number {
   if (t.values?.length) {
     h += wrapValues(t.values, boxChars(boxWidth)).length * ROW + 8;
   }
+  if (t.invariants?.length) {
+    const lines = wrapInvariants(t.invariants, boxChars(boxWidth));
+    h += lines.reduce((n, l) => n + l.length, 0) * ROW + 10;
+  }
   return h;
 }
 
 /** Width a type with several constants wants, so the list is not a column. */
 const VALUES_CHARS = 42;
 const VALUES_MIN_COUNT = 4;
+/** Rules are sentences; below this they wrap into an unreadable ribbon. */
+const RULES_CHARS = 40;
 
 export function bodyWidth(t: BoxLike): number {
   let w = Math.max(
@@ -110,6 +155,9 @@ export function bodyWidth(t: BoxLike): number {
     w = Math.max(w, VALUES_CHARS * CHAR);
   } else if (t.values?.length) {
     w = Math.max(w, widest(t.values, (v) => (v.name.length + 3) * CHAR));
+  }
+  if (t.invariants?.length) {
+    w = Math.max(w, RULES_CHARS * CHAR);
   }
   return w;
 }

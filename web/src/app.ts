@@ -239,6 +239,12 @@ function renderSide(): void {
       expanded.clear();
       rebuild(true);
     },
+    onHighlight: (name) => {
+      const svg = stage.querySelector("svg");
+      if (!svg) return;
+      if (name) highlight(svg, name);
+      else clearHighlight(svg);
+    },
   });
 }
 

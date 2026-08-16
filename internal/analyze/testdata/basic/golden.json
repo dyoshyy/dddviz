@@ -9,13 +9,13 @@
     {
       "name": "Customer",
       "pkg": "example.com/basic",
-      "pos": "shop.go:95",
+      "pos": "shop.go:135",
       "idType": "CustomerID",
       "members": [
         {
           "name": "Money",
           "pkg": "example.com/basic",
-          "pos": "shop.go:73",
+          "pos": "shop.go:113",
           "kind": "vo",
           "fields": [
             {
@@ -73,13 +73,13 @@
     {
       "name": "Order",
       "pkg": "example.com/basic",
-      "pos": "shop.go:10",
+      "pos": "shop.go:15",
       "idType": "OrderID",
       "members": [
         {
           "name": "Money",
           "pkg": "example.com/basic",
-          "pos": "shop.go:73",
+          "pos": "shop.go:113",
           "kind": "vo",
           "fields": [
             {
@@ -114,7 +114,7 @@
         {
           "name": "OrderLine",
           "pkg": "example.com/basic",
-          "pos": "shop.go:52",
+          "pos": "shop.go:92",
           "kind": "vo",
           "fields": [
             {
@@ -142,7 +142,7 @@
         {
           "name": "Priority",
           "pkg": "example.com/basic",
-          "pos": "shop.go:35",
+          "pos": "shop.go:40",
           "kind": "vo",
           "fields": [],
           "values": [
@@ -165,7 +165,7 @@
         {
           "name": "Shipment",
           "pkg": "example.com/basic",
-          "pos": "shop.go:63",
+          "pos": "shop.go:103",
           "kind": "entity",
           "fields": [
             {
@@ -190,7 +190,7 @@
         {
           "name": "Status",
           "pkg": "example.com/basic",
-          "pos": "shop.go:24",
+          "pos": "shop.go:29",
           "kind": "vo",
           "fields": [],
           "values": [
@@ -214,7 +214,7 @@
         {
           "name": "Quantity",
           "pkg": "example.com/basic",
-          "pos": "shop.go:92",
+          "pos": "shop.go:132",
           "kind": "vo",
           "fields": [],
           "depth": 2
@@ -222,7 +222,7 @@
         {
           "name": "SKU",
           "pkg": "example.com/basic",
-          "pos": "shop.go:90",
+          "pos": "shop.go:130",
           "kind": "vo",
           "fields": [],
           "doc": "SKU and Quantity are value objects that wrap a primitive rather than a struct.",
@@ -272,9 +272,32 @@
           "pointer": true
         },
         {
+          "name": "Place",
+          "signature": "() error",
+          "doc": "Place is a method, so its rule belongs to Order too.",
+          "pointer": true
+        },
+        {
           "name": "Total",
           "signature": "() Money",
           "pointer": true
+        }
+      ],
+      "invariants": [
+        {
+          "text": "a customer is required",
+          "pos": "shop.go:55",
+          "from": "NewOrder"
+        },
+        {
+          "text": "at least one line is required",
+          "pos": "shop.go:58",
+          "from": "NewOrder"
+        },
+        {
+          "text": "only a draft can be placed",
+          "pos": "shop.go:71",
+          "from": "Place"
         }
       ],
       "doc": "Order is a customer's purchase, and the unit of consistency here.\n\nThe second paragraph should survive into the doc text, while the marker\nbelow must not."
@@ -289,24 +312,42 @@
   ],
   "unclassified": [
     {
+      "name": "OrderStore",
+      "pkg": "example.com/basic",
+      "pos": "shop.go:158",
+      "kind": "interface",
+      "touches": [
+        "Order"
+      ]
+    },
+    {
       "name": "PlaceOrderRequest",
       "pkg": "example.com/basic",
-      "pos": "shop.go:111",
+      "pos": "shop.go:164",
       "kind": "data"
+    },
+    {
+      "name": "OrderPricer",
+      "pkg": "example.com/basic",
+      "pos": "shop.go:152",
+      "kind": "service",
+      "touches": [
+        "Order"
+      ]
     },
     {
       "name": "PricingService",
       "pkg": "example.com/basic",
-      "pos": "shop.go:106",
+      "pos": "shop.go:146",
       "kind": "service"
     }
   ],
-  "unclassifiedTotal": 2,
+  "unclassifiedTotal": 4,
   "candidates": [
     {
       "name": "Shipment",
       "pkg": "example.com/basic",
-      "pos": "shop.go:63",
+      "pos": "shop.go:103",
       "idType": "ShipmentID"
     }
   ]

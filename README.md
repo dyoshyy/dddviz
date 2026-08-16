@@ -40,6 +40,21 @@ is not really "a string" — it is the twenty-one values it can hold, and
 those values are the vocabulary the domain speaks in. A diagram showing only
 the type name leaves that out entirely.
 
+So do the rules. A box also lists what its constructors refuse to build
+without, read from the errors they return:
+
+```
+Exercise                                          ExerciseID
+...
+! a main lift is required for a main exercise
+! a variation must carry a ratio to its main lift
+! an accessory must not carry a main lift
+```
+
+Those rules and the constants explain each other: `ExerciseKind` has three
+values, and six of the rules say what each of the three requires. Neither
+half means much alone, and a type declaration states neither.
+
 - Click an aggregate to **expand or collapse** it. Collapsed, the diagram is
   a map between aggregates; expanded, it shows what is inside. These are two
   zoom levels of one diagram rather than two separate diagrams
@@ -115,6 +130,8 @@ infers the rest.
 | References between aggregates | A field in aggregate A holding B's ID type means A → B |
 | Unclassified | Types no aggregate root can reach. Grouped by what their structure says — interfaces, all-exported structs, fieldless structs — and folded so a service and its helpers read as one entry |
 | Methods | Exported methods with their signatures, and their doc comments on hover |
+| Invariants | The rules a constructor or validating method enforces, read from the errors it returns. Wrapped errors are skipped, and the lead-in every message repeats is dropped |
+| What a type touches | For types outside every aggregate, which aggregates their methods take or return. A policy object and a stateless service look identical from the outside; what they work on does not |
 | Constants | Typed constants, in declaration order, since that order usually carries meaning. The literal is dropped when the name already says it (`ChestUpper` covers `"CHEST_UPPER"`) |
 
 `//ddd:id for=Order` states the pairing when naming departs from the convention.

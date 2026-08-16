@@ -15,6 +15,7 @@ import (
 	"go/types"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"unicode"
 
@@ -53,13 +54,14 @@ func Load(dir string, patterns ...string) (*model.Graph, error) {
 	}
 
 	a := &analyzer{
-		fset:      pkgs[0].Fset,
-		types:     map[string]*declared{},
-		inScope:   map[string]bool{},
-		aggById:   map[string]string{},
-		identity:  map[string]bool{},
-		aggregate: map[string]*declared{},
-		enums:     map[string][]model.EnumValue{},
+		fset:       pkgs[0].Fset,
+		types:      map[string]*declared{},
+		inScope:    map[string]bool{},
+		aggById:    map[string]string{},
+		identity:   map[string]bool{},
+		aggregate:  map[string]*declared{},
+		enums:      map[string][]model.EnumValue{},
+		invariants: map[string][]model.Invariant{},
 	}
 	for _, p := range pkgs {
 		a.collect(p)
@@ -104,6 +106,8 @@ type analyzer struct {
 	aggregate map[string]*declared
 	// enums maps a type key to its typed constants, in declaration order.
 	enums map[string][]model.EnumValue
+	// invariants maps a type key to the rules its constructors enforce.
+	invariants map[string][]model.Invariant
 }
 
 func (a *analyzer) collect(p *packages.Package) {
@@ -124,6 +128,7 @@ func (a *analyzer) collect(p *packages.Package) {
 					}
 					methodDocs[recv][fd.Name.Name] = docText(fd.Doc)
 				}
+				a.collectInvariants(p, fd)
 				continue
 			}
 			gd, ok := decl.(*ast.GenDecl)
@@ -279,6 +284,170 @@ func nameCovers(name, literal string) bool {
 	}
 	n, l := norm(name), norm(literal)
 	return l != "" && strings.Contains(n, l)
+}
+
+// collectInvariants reads the rules a function refuses to build without.
+//
+// A function counts when it either has a receiver, or returns a named type
+// alongside an error -- that is, when it is the way a value of that type
+// comes into existence. Helpers that only return an error belong to no type
+// and are skipped; their rules surface through whoever calls them.
+func (a *analyzer) collectInvariants(p *packages.Package, fd *ast.FuncDecl) {
+	owner := a.invariantOwner(p, fd)
+	if owner == "" {
+		return
+	}
+
+	ast.Inspect(fd.Body, func(n ast.Node) bool {
+		call, ok := n.(*ast.CallExpr)
+		if !ok || len(call.Args) == 0 {
+			return true
+		}
+		sel, ok := call.Fun.(*ast.SelectorExpr)
+		if !ok {
+			return true
+		}
+		pkg, ok := sel.X.(*ast.Ident)
+		if !ok {
+			return true
+		}
+		switch {
+		case pkg.Name == "errors" && sel.Sel.Name == "New":
+		case pkg.Name == "fmt" && sel.Sel.Name == "Errorf":
+		default:
+			return true
+		}
+
+		lit, ok := call.Args[0].(*ast.BasicLit)
+		if !ok || lit.Kind != token.STRING {
+			return true
+		}
+		text := ruleText(lit.Value)
+		if text == "" {
+			return true
+		}
+
+		a.invariants[owner] = append(a.invariants[owner], model.Invariant{
+			Text: text,
+			Pos:  shortPos(a.fset.Position(lit.Pos())),
+			From: fd.Name.Name,
+		})
+		return true
+	})
+}
+
+// invariantOwner decides which type a function's rules belong to.
+func (a *analyzer) invariantOwner(p *packages.Package, fd *ast.FuncDecl) string {
+	obj, ok := p.TypesInfo.Defs[fd.Name].(*types.Func)
+	if !ok {
+		return ""
+	}
+	sig, ok := obj.Type().(*types.Signature)
+	if !ok {
+		return ""
+	}
+
+	// A method's rules belong to its receiver.
+	if recv := sig.Recv(); recv != nil {
+		if named := namedOf(recv.Type()); named != nil {
+			return keyOf(named)
+		}
+		return ""
+	}
+
+	// A constructor returns the type it builds, together with an error.
+	results := sig.Results()
+	if results == nil || results.Len() < 2 {
+		return ""
+	}
+	last := results.At(results.Len() - 1)
+	if last.Type().String() != "error" {
+		return ""
+	}
+	for i := 0; i < results.Len()-1; i++ {
+		if named := namedOf(results.At(i).Type()); named != nil {
+			return keyOf(named)
+		}
+	}
+	return ""
+}
+
+// namedOf peels a pointer to reach a named type.
+func namedOf(t types.Type) *types.Named {
+	if ptr, ok := t.(*types.Pointer); ok {
+		t = ptr.Elem()
+	}
+	named, ok := t.(*types.Named)
+	if !ok || named.Obj().Pkg() == nil {
+		return nil
+	}
+	return named
+}
+
+func keyOf(named *types.Named) string {
+	return named.Obj().Pkg().Path() + "." + named.Obj().Name()
+}
+
+// trimSharedPrefix drops the lead-in that every rule of a type repeats.
+//
+// Errors usually name the thing that failed before stating what was wrong
+// with it -- "種目 %s: メイン種目は..." -- which is useful when reading a
+// failure and pure noise when reading nine rules of the same type in a row.
+func trimSharedPrefix(inv []model.Invariant) []model.Invariant {
+	if len(inv) < 2 {
+		return inv
+	}
+
+	prefix := []rune(inv[0].Text)
+	for _, i := range inv[1:] {
+		r := []rune(i.Text)
+		n := 0
+		for n < len(prefix) && n < len(r) && prefix[n] == r[n] {
+			n++
+		}
+		prefix = prefix[:n]
+	}
+	// Only worth doing when the shared lead-in actually names something.
+	if len(prefix) < 2 {
+		return inv
+	}
+
+	out := make([]model.Invariant, len(inv))
+	for k, i := range inv {
+		text := strings.TrimLeft(string([]rune(i.Text)[len(prefix):]), ": 　の")
+		if text == "" {
+			// Nothing but the prefix; keep the original rather than blank it.
+			text = i.Text
+		}
+		i.Text = text
+		out[k] = i
+	}
+	return out
+}
+
+// ruleText turns an error format string into a readable rule, or returns
+// empty for a string that states no rule.
+//
+// A format containing %w only wraps someone else's error -- it adds context
+// for whoever reads the failure, not a rule of its own, and the rule it
+// wraps is already collected where it is stated. The trailing ": %v" that
+// carries the offending value is dropped for the same reason.
+//
+// Other verbs are kept. "レップ数は1〜%dの範囲である必要がある" loses its
+// meaning without the %d, since the bound is the rule.
+func ruleText(quoted string) string {
+	text, err := strconv.Unquote(quoted)
+	if err != nil {
+		return ""
+	}
+	if strings.Contains(text, "%w") {
+		return ""
+	}
+	text = strings.TrimSpace(text)
+	if i := strings.LastIndex(text, ": %"); i > 0 && len(text)-i <= 4 {
+		text = text[:i]
+	}
+	return strings.TrimSpace(text)
 }
 
 // receiverTypeName returns the type a method is declared on, peeling off a
@@ -511,10 +680,11 @@ func (a *analyzer) foldUnclassified(
 	covered[key] = true
 
 	entry := model.Unclassified{
-		Name: root.name,
-		Pkg:  root.pkgPath,
-		Pos:  shortPos(root.pos),
-		Kind: classifyUnclassified(root),
+		Name:    root.name,
+		Pkg:     root.pkgPath,
+		Pos:     shortPos(root.pos),
+		Kind:    classifyUnclassified(root),
+		Touches: a.touches(root),
 	}
 
 	seen := map[string]bool{key: true}
@@ -536,11 +706,12 @@ func (a *analyzer) foldUnclassified(
 
 			d := set[next]
 			entry.Members = append(entry.Members, model.UnclassifiedRef{
-				Name:  d.name,
-				Pkg:   d.pkgPath,
-				Pos:   shortPos(d.pos),
-				Kind:  classifyUnclassified(d),
-				Depth: cur.depth + 1,
+				Name:    d.name,
+				Pkg:     d.pkgPath,
+				Pos:     shortPos(d.pos),
+				Kind:    classifyUnclassified(d),
+				Touches: a.touches(d),
+				Depth:   cur.depth + 1,
 			})
 			queue = append(queue, item{key: next, depth: cur.depth + 1})
 		}
@@ -553,6 +724,73 @@ func (a *analyzer) foldUnclassified(
 		return entry.Members[i].Name < entry.Members[j].Name
 	})
 	return entry
+}
+
+// touches lists the aggregates a type reaches through its method signatures.
+//
+// A type outside every aggregate is still part of the domain when it takes
+// or returns one. Naming what it touches says more about its role than its
+// shape does -- a policy object and a stateless service look identical from
+// the outside.
+func (a *analyzer) touches(d *declared) []string {
+	seen := map[string]bool{}
+	var out []string
+
+	add := func(t types.Type) {
+		for _, target := range a.namedTargets(t) {
+			key := target.key()
+			name := ""
+			if target.isAggregate {
+				name = target.name
+			} else if agg, ok := a.aggById[key]; ok {
+				name = agg
+			}
+			if name == "" || seen[name] {
+				continue
+			}
+			seen[name] = true
+			out = append(out, name)
+		}
+	}
+
+	for _, fn := range exportedMethods(d.named) {
+		sig, ok := fn.Type().(*types.Signature)
+		if !ok {
+			continue
+		}
+		for _, list := range []*types.Tuple{sig.Params(), sig.Results()} {
+			for j := 0; j < list.Len(); j++ {
+				add(list.At(j).Type())
+			}
+		}
+	}
+
+	sort.Strings(out)
+	return out
+}
+
+// exportedMethods returns a type's exported methods.
+//
+// An interface keeps its methods on the underlying type rather than on the
+// named one, so a repository port would otherwise look like it has none.
+func exportedMethods(named *types.Named) []*types.Func {
+	var out []*types.Func
+
+	if iface, ok := named.Underlying().(*types.Interface); ok {
+		for i := 0; i < iface.NumMethods(); i++ {
+			if fn := iface.Method(i); fn.Exported() {
+				out = append(out, fn)
+			}
+		}
+		return out
+	}
+
+	for i := 0; i < named.NumMethods(); i++ {
+		if fn := named.Method(i); fn.Exported() {
+			out = append(out, fn)
+		}
+	}
+	return out
 }
 
 // classifyUnclassified reads a type's structure. It says nothing about
@@ -667,14 +905,15 @@ func commonPrefix(paths []string) string {
 // buildAggregate walks breadth-first over the types reachable from a root.
 func (a *analyzer) buildAggregate(root *declared, reached map[string]bool) (model.Aggregate, []model.Reference) {
 	out := model.Aggregate{
-		Name:    root.name,
-		Pkg:     root.pkgPath,
-		Pos:     shortPos(root.pos),
-		Members: []model.Member{},
-		Fields:  a.fieldsOf(root),
-		Methods: a.methodsOf(root),
-		Values:  a.enums[root.key()],
-		Doc:     root.doc,
+		Name:       root.name,
+		Pkg:        root.pkgPath,
+		Pos:        shortPos(root.pos),
+		Members:    []model.Member{},
+		Fields:     a.fieldsOf(root),
+		Methods:    a.methodsOf(root),
+		Values:     a.enums[root.key()],
+		Invariants: trimSharedPrefix(a.invariants[root.key()]),
+		Doc:        root.doc,
 	}
 	if key, ok := a.idTypeOf(root); ok {
 		out.IDType = a.types[key].name
@@ -722,15 +961,16 @@ func (a *analyzer) buildAggregate(root *declared, reached map[string]bool) (mode
 				reached[key] = true
 
 				out.Members = append(out.Members, model.Member{
-					Name:    target.name,
-					Pkg:     target.pkgPath,
-					Pos:     shortPos(target.pos),
-					Kind:    a.classify(target),
-					Fields:  a.fieldsOf(target),
-					Methods: a.methodsOf(target),
-					Values:  a.enums[key],
-					Doc:     target.doc,
-					Depth:   cur.depth + 1,
+					Name:       target.name,
+					Pkg:        target.pkgPath,
+					Pos:        shortPos(target.pos),
+					Kind:       a.classify(target),
+					Fields:     a.fieldsOf(target),
+					Methods:    a.methodsOf(target),
+					Values:     a.enums[key],
+					Invariants: trimSharedPrefix(a.invariants[key]),
+					Doc:        target.doc,
+					Depth:      cur.depth + 1,
 				})
 				queue = append(queue, item{d: target, depth: cur.depth + 1})
 			}
@@ -795,16 +1035,15 @@ func (a *analyzer) classify(d *declared) model.Kind {
 func (a *analyzer) methodsOf(d *declared) []model.Method {
 	var out []model.Method
 
-	for i := 0; i < d.named.NumMethods(); i++ {
-		fn := d.named.Method(i)
-		if !fn.Exported() {
-			continue
-		}
+	for _, fn := range exportedMethods(d.named) {
 		sig, ok := fn.Type().(*types.Signature)
 		if !ok {
 			continue
 		}
-		_, pointer := sig.Recv().Type().(*types.Pointer)
+		pointer := false
+		if recv := sig.Recv(); recv != nil {
+			_, pointer = recv.Type().(*types.Pointer)
+		}
 
 		out = append(out, model.Method{
 			Name: fn.Name(),

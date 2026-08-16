@@ -22,6 +22,12 @@ export interface EnumValue {
   doc?: string;
 }
 
+export interface Invariant {
+  text: string;
+  pos: string;
+  from?: string;
+}
+
 export interface Method {
   name: string;
   signature: string;
@@ -37,6 +43,7 @@ export interface Member {
   fields: Field[];
   methods?: Method[];
   values?: EnumValue[];
+  invariants?: Invariant[];
   doc?: string;
   depth: number;
 }
@@ -50,6 +57,7 @@ export interface Aggregate {
   fields: Field[];
   methods?: Method[];
   values?: EnumValue[];
+  invariants?: Invariant[];
   doc?: string;
 }
 
@@ -64,6 +72,7 @@ export interface UnclassifiedRef {
   pkg: string;
   pos: string;
   kind: UnclassifiedKind;
+  touches?: string[];
   depth: number;
 }
 
@@ -72,6 +81,7 @@ export interface Unclassified {
   pkg: string;
   pos: string;
   kind: UnclassifiedKind;
+  touches?: string[];
   members?: UnclassifiedRef[];
 }
 
@@ -97,7 +107,10 @@ export interface Graph {
 }
 
 /** Anything drawn as a box: an aggregate root or one of its members. */
-export type BoxLike = Pick<Aggregate, "fields" | "methods" | "values" | "doc">;
+export type BoxLike = Pick<
+  Aggregate,
+  "fields" | "methods" | "values" | "invariants" | "doc"
+>;
 
 declare global {
   interface Window {

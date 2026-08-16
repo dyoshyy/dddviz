@@ -339,3 +339,30 @@ button.link {
   fill: var(--accent);
   opacity: 0.85;
 }
+
+/* --- invariants --- */
+
+.invariant {
+  font: 10.5px ui-sans-serif, system-ui, sans-serif;
+  fill: var(--ink-dim);
+}
+.invariant-mark {
+  font: 600 10.5px ui-monospace, monospace;
+  fill: var(--accent);
+}
+
+/* --- what an unclassified type touches --- */
+
+#side .touches { white-space: nowrap; }
+#side .touch {
+  display: inline-block;
+  font: 9px ui-monospace, monospace;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 3px;
+  padding: 0 3px;
+  margin-left: 3px;
+  cursor: default;
+  opacity: 0.75;
+}
+#side .touch:hover { opacity: 1; }

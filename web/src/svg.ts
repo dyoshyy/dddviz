@@ -10,6 +10,7 @@ import {
   ROW,
   boxChars,
   docLine,
+  wrapInvariants,
   wrapValues,
 } from "./measure";
 
@@ -139,6 +140,35 @@ function drawBody(
     y += methods.length * ROW + 4;
   }
 
+  // Rules come last. They are the most important thing a type carries and
+  // the longest to read, so they sit where the eye ends up rather than in
+  // the way of the name and the shape.
+  const invariants = t.invariants ?? [];
+  if (invariants.length) {
+    el(
+      "line",
+      { x1: x, y1: y + 2, x2: x + boxWidth - PAD * 2, y2: y + 2, class: "rule dim" },
+      g
+    );
+    y += 6;
+
+    const wrapped = wrapInvariants(invariants, chars);
+    wrapped.forEach((lines) => {
+      lines.forEach((content, j) => {
+        const line = row(g, x, y + 11, "invariant");
+        if (j === 0) {
+          el("tspan", { class: "invariant-mark" }, line).textContent = "!";
+          el("tspan", {}, line).textContent = " " + content;
+        } else {
+          line.setAttribute("x", String(x + CHAR * 2));
+          el("tspan", {}, line).textContent = content;
+        }
+        y += ROW;
+      });
+    });
+    y += 4;
+  }
+
   return y;
 }
 
@@ -159,7 +189,13 @@ function drawMember(parent: Element, p: { member: Member; x: number; y: number; 
   const badge = text(g, p.width - PAD, 16, "badge", m.kind.toUpperCase());
   badge.setAttribute("text-anchor", "end");
 
-  if (m.fields.length || m.methods?.length || m.values?.length || m.doc) {
+  if (
+    m.fields.length ||
+    m.methods?.length ||
+    m.values?.length ||
+    m.invariants?.length ||
+    m.doc
+  ) {
     el(
       "line",
       { x1: PAD, y1: HEAD - 6, x2: p.width - PAD, y2: HEAD - 6, class: "rule" },
@@ -223,6 +259,10 @@ function bodyHeightOf(t: BoxLike, boxWidth: number): number {
     h += wrapValues(t.values, boxChars(boxWidth)).length * ROW + 8;
   }
   if (t.methods?.length) h += t.methods.length * ROW + 8;
+  if (t.invariants?.length) {
+    const lines = wrapInvariants(t.invariants, boxChars(boxWidth));
+    h += lines.reduce((n, l) => n + l.length, 0) * ROW + 10;
+  }
   return h;
 }
 

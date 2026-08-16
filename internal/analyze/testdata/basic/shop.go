@@ -1,6 +1,11 @@
 // Package shop covers the cases where classification is easy to get wrong.
 package shop
 
+import (
+	"errors"
+	"fmt"
+)
+
 // Order is a customer's purchase, and the unit of consistency here.
 //
 // The second paragraph should survive into the doc text, while the marker
@@ -42,6 +47,41 @@ const (
 
 // unexportedConst must not appear.
 const unexportedConst Status = "HIDDEN"
+
+// NewOrder states the rules an order cannot be built without. Every message
+// repeats the "order: " lead-in, which the diagram should drop.
+func NewOrder(customer CustomerID, lines []OrderLine) (*Order, error) {
+	if customer == "" {
+		return nil, errors.New("order: a customer is required")
+	}
+	if len(lines) == 0 {
+		return nil, errors.New("order: at least one line is required")
+	}
+	if err := validateLines(lines); err != nil {
+		// A wrap states no rule of its own and must not be collected.
+		return nil, fmt.Errorf("order: %w", err)
+	}
+	return &Order{customer: customer, lines: lines}, nil
+}
+
+// Place is a method, so its rule belongs to Order too.
+func (o *Order) Place() error {
+	if o.status != StatusDraft {
+		// The trailing value is dropped, the rule is kept.
+		return fmt.Errorf("order: only a draft can be placed: %s", o.status)
+	}
+	o.status = StatusPlaced
+	return nil
+}
+
+// validateLines belongs to no type, so its rules surface through NewOrder
+// rather than being attributed here.
+func validateLines(lines []OrderLine) error {
+	if len(lines) > 100 {
+		return errors.New("an order carries at most 100 lines")
+	}
+	return nil
+}
 
 // ID identifies the order.
 func (o *Order) ID() OrderID        { return o.id }
@@ -106,6 +146,19 @@ func (c *Customer) ID() CustomerID { return c.id }
 type PricingService struct{}
 
 func (PricingService) Price(sku SKU) Money { return Money{} }
+
+// OrderPricer belongs to no aggregate, but it works on one. What it touches
+// places it better than its shape does.
+type OrderPricer struct{}
+
+func (OrderPricer) Total(o *Order) Money { return o.total }
+
+// OrderStore is a port, whose methods live on the interface rather than on
+// the named type.
+type OrderStore interface {
+	Find(id OrderID) (*Order, error)
+	Save(o *Order) error
+}
 
 // PlaceOrderRequest is an unreachable DTO.
 type PlaceOrderRequest struct {

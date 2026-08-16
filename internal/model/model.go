@@ -54,6 +54,8 @@ type Aggregate struct {
 	// Values are the typed constants declared for this type, in the order
 	// they are declared.
 	Values []EnumValue `json:"values,omitempty"`
+	// Invariants are the rules enforced when the type is built.
+	Invariants []Invariant `json:"invariants,omitempty"`
 	// Doc is the type's doc comment, with any //ddd: markers removed.
 	Doc string `json:"doc,omitempty"`
 }
@@ -72,14 +74,15 @@ const (
 // Sharing one node would draw edges across boundaries and blur the very
 // thing the diagram is about.
 type Member struct {
-	Name    string      `json:"name"`
-	Pkg     string      `json:"pkg"`
-	Pos     string      `json:"pos"`
-	Kind    Kind        `json:"kind"`
-	Fields  []Field     `json:"fields"`
-	Methods []Method    `json:"methods,omitempty"`
-	Values  []EnumValue `json:"values,omitempty"`
-	Doc     string      `json:"doc,omitempty"`
+	Name       string      `json:"name"`
+	Pkg        string      `json:"pkg"`
+	Pos        string      `json:"pos"`
+	Kind       Kind        `json:"kind"`
+	Fields     []Field     `json:"fields"`
+	Methods    []Method    `json:"methods,omitempty"`
+	Values     []EnumValue `json:"values,omitempty"`
+	Invariants []Invariant `json:"invariants,omitempty"`
+	Doc        string      `json:"doc,omitempty"`
 	// Depth is the shortest distance from the root. 1 means a direct field.
 	Depth int `json:"depth"`
 }
@@ -101,6 +104,18 @@ type EnumValue struct {
 	// name in more than casing and punctuation.
 	Value string `json:"value,omitempty"`
 	Doc   string `json:"doc,omitempty"`
+}
+
+// Invariant is a rule the type refuses to be constructed without.
+//
+// These are read off the errors a constructor or a validating method
+// returns. A domain model's rules are usually its most important content
+// and the part a type declaration says least about.
+type Invariant struct {
+	Text string `json:"text"`
+	Pos  string `json:"pos"`
+	// From is the function that enforces the rule.
+	From string `json:"from,omitempty"`
 }
 
 // Method is an exported method, which is how the rest of the code is allowed
@@ -157,16 +172,20 @@ type Unclassified struct {
 	Pkg  string           `json:"pkg"`
 	Pos  string           `json:"pos"`
 	Kind UnclassifiedKind `json:"kind"`
+	// Touches names the aggregates this type takes or returns, which says
+	// more about its role than its structure does.
+	Touches []string `json:"touches,omitempty"`
 	// Members are the unclassified types reachable from this one.
 	Members []UnclassifiedRef `json:"members,omitempty"`
 }
 
 // UnclassifiedRef is an unclassified type folded under another one.
 type UnclassifiedRef struct {
-	Name string           `json:"name"`
-	Pkg  string           `json:"pkg"`
-	Pos  string           `json:"pos"`
-	Kind UnclassifiedKind `json:"kind"`
+	Name    string           `json:"name"`
+	Pkg     string           `json:"pkg"`
+	Pos     string           `json:"pos"`
+	Kind    UnclassifiedKind `json:"kind"`
+	Touches []string         `json:"touches,omitempty"`
 	// Depth is the shortest distance from the entry it is folded under.
 	Depth int `json:"depth"`
 }

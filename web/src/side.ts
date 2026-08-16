@@ -32,25 +32,44 @@ export function plural(n: number, noun: string): string {
   return `${n} ${noun}${n === 1 ? "" : "s"}`;
 }
 
+/**
+ * The aggregates a type takes or returns.
+ *
+ * A type living outside every aggregate is still part of the domain when it
+ * works on one, and saying which one places it far better than calling it
+ * "unclassified" does. Hovering lights up that aggregate in the diagram.
+ */
+function touches(names: string[] | undefined): string {
+  if (!names?.length) return "";
+  return (
+    ` <span class="touches">` +
+    names
+      .map((n) => `<span class="touch" data-agg="${escapeHtml(n)}">${escapeHtml(n)}</span>`)
+      .join("") +
+    `</span>`
+  );
+}
+
 function entry(u: Unclassified): string {
   const name = `<b>${escapeHtml(u.name)}</b>`;
   const pos = `<span class="pos">${escapeHtml(u.pos)}</span>`;
 
   if (!u.members?.length) {
-    return `<div class="unc">${name}<br>${pos}</div>`;
+    return `<div class="unc">${name}${touches(u.touches)}<br>${pos}</div>`;
   }
 
   const rows = u.members
     .map(
       (m) =>
         `<div class="unc-child" style="padding-left:${m.depth * 10}px">` +
-        `${escapeHtml(m.name)} <span class="tag">${escapeHtml(m.kind)}</span><br>` +
+        `${escapeHtml(m.name)} <span class="tag">${escapeHtml(m.kind)}</span>` +
+        `${touches(m.touches)}<br>` +
         `<span class="pos">${escapeHtml(m.pos)}</span></div>`
     )
     .join("");
 
   return (
-    `<details class="unc"><summary>${name} ` +
+    `<details class="unc"><summary>${name}${touches(u.touches)} ` +
     `<span class="count">+${u.members.length}</span><br>${pos}</summary>` +
     `${rows}</details>`
   );
@@ -90,6 +109,7 @@ function unclassifiedSection(graph: Graph): string {
 export interface SideHandlers {
   onExpandAll: () => void;
   onCollapseAll: () => void;
+  onHighlight: (aggregate: string | null) => void;
 }
 
 export function buildSide(
@@ -119,6 +139,14 @@ export function buildSide(
 
   html += unclassifiedSection(graph);
   side.innerHTML = html;
+
+  // Hovering an aggregate name in the list lights it up in the diagram.
+  side.querySelectorAll<HTMLElement>(".touch").forEach((el) => {
+    el.addEventListener("mouseenter", () =>
+      handlers.onHighlight(el.dataset["agg"] ?? null)
+    );
+    el.addEventListener("mouseleave", () => handlers.onHighlight(null));
+  });
 
   if (!aggCount) return;
   document.getElementById("all-open")?.addEventListener("click", handlers.onExpandAll);
