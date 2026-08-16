@@ -9,13 +9,13 @@
     {
       "name": "Customer",
       "pkg": "example.com/basic",
-      "pos": "shop.go:54",
+      "pos": "shop.go:69",
       "idType": "CustomerID",
       "members": [
         {
           "name": "Money",
           "pkg": "example.com/basic",
-          "pos": "shop.go:41",
+          "pos": "shop.go:47",
           "kind": "vo",
           "fields": [
             {
@@ -27,6 +27,24 @@
               "type": "string"
             }
           ],
+          "methods": [
+            {
+              "name": "Add",
+              "signature": "(o Money) Money",
+              "doc": "Add returns the sum, leaving the receiver alone."
+            },
+            {
+              "name": "Amount",
+              "signature": "() int64"
+            },
+            {
+              "name": "Charge",
+              "signature": "(n int64)",
+              "doc": "Charge mutates through a pointer, so Money mixes receiver forms.",
+              "pointer": true
+            }
+          ],
+          "doc": "Money is reachable from two aggregates and must appear under both.",
           "depth": 1
         }
       ],
@@ -43,18 +61,25 @@
           "name": "balance",
           "type": "Money"
         }
+      ],
+      "methods": [
+        {
+          "name": "ID",
+          "signature": "() CustomerID",
+          "pointer": true
+        }
       ]
     },
     {
       "name": "Order",
       "pkg": "example.com/basic",
-      "pos": "shop.go:5",
+      "pos": "shop.go:10",
       "idType": "OrderID",
       "members": [
         {
           "name": "Money",
           "pkg": "example.com/basic",
-          "pos": "shop.go:41",
+          "pos": "shop.go:47",
           "kind": "vo",
           "fields": [
             {
@@ -66,12 +91,30 @@
               "type": "string"
             }
           ],
+          "methods": [
+            {
+              "name": "Add",
+              "signature": "(o Money) Money",
+              "doc": "Add returns the sum, leaving the receiver alone."
+            },
+            {
+              "name": "Amount",
+              "signature": "() int64"
+            },
+            {
+              "name": "Charge",
+              "signature": "(n int64)",
+              "doc": "Charge mutates through a pointer, so Money mixes receiver forms.",
+              "pointer": true
+            }
+          ],
+          "doc": "Money is reachable from two aggregates and must appear under both.",
           "depth": 1
         },
         {
           "name": "OrderLine",
           "pkg": "example.com/basic",
-          "pos": "shop.go:20",
+          "pos": "shop.go:26",
           "kind": "vo",
           "fields": [
             {
@@ -83,12 +126,23 @@
               "type": "Quantity"
             }
           ],
+          "methods": [
+            {
+              "name": "Qty",
+              "signature": "() Quantity"
+            },
+            {
+              "name": "SKU",
+              "signature": "() SKU"
+            }
+          ],
+          "doc": "OrderLine has value receivers only, so it must classify as a VO.",
           "depth": 1
         },
         {
           "name": "Shipment",
           "pkg": "example.com/basic",
-          "pos": "shop.go:31",
+          "pos": "shop.go:37",
           "kind": "entity",
           "fields": [
             {
@@ -100,12 +154,20 @@
               "type": "string"
             }
           ],
+          "methods": [
+            {
+              "name": "ID",
+              "signature": "() ShipmentID",
+              "pointer": true
+            }
+          ],
+          "doc": "Shipment has a pointer receiver and a ShipmentID field, but no\n//ddd:aggregate marker. It is an entity inside Order rather than a root,\nand ShipmentID is not an aggregate ID, so it draws no reference arrow.",
           "depth": 1
         },
         {
           "name": "Quantity",
           "pkg": "example.com/basic",
-          "pos": "shop.go:51",
+          "pos": "shop.go:66",
           "kind": "vo",
           "fields": [],
           "depth": 2
@@ -113,9 +175,10 @@
         {
           "name": "SKU",
           "pkg": "example.com/basic",
-          "pos": "shop.go:49",
+          "pos": "shop.go:64",
           "kind": "vo",
           "fields": [],
+          "doc": "SKU and Quantity are value objects that wrap a primitive rather than a struct.",
           "depth": 2
         }
       ],
@@ -140,7 +203,26 @@
           "name": "total",
           "type": "Money"
         }
-      ]
+      ],
+      "methods": [
+        {
+          "name": "ID",
+          "signature": "() OrderID",
+          "doc": "ID identifies the order.",
+          "pointer": true
+        },
+        {
+          "name": "Lines",
+          "signature": "() []OrderLine",
+          "pointer": true
+        },
+        {
+          "name": "Total",
+          "signature": "() Money",
+          "pointer": true
+        }
+      ],
+      "doc": "Order is a customer's purchase, and the unit of consistency here.\n\nThe second paragraph should survive into the doc text, while the marker\nbelow must not."
     }
   ],
   "references": [
@@ -154,13 +236,13 @@
     {
       "name": "PlaceOrderRequest",
       "pkg": "example.com/basic",
-      "pos": "shop.go:70",
+      "pos": "shop.go:85",
       "kind": "data"
     },
     {
       "name": "PricingService",
       "pkg": "example.com/basic",
-      "pos": "shop.go:65",
+      "pos": "shop.go:80",
       "kind": "service"
     }
   ],
@@ -169,7 +251,7 @@
     {
       "name": "Shipment",
       "pkg": "example.com/basic",
-      "pos": "shop.go:31",
+      "pos": "shop.go:37",
       "idType": "ShipmentID"
     }
   ]

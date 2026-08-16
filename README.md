@@ -30,13 +30,17 @@ wrote docs/domain.html (3 aggregates, 2 references, 23 unclassified)
 ```
 
 The output is one HTML file with no dependencies. Aggregates become frames,
-their contents nest inside, and ID references connect them.
+their contents nest inside, and ID references connect them. Each box carries
+the type's doc comment, its fields, and its exported methods with their
+signatures — enough to read what a type is and how you are meant to use it
+without opening the file.
 
 - Click an aggregate to **expand or collapse** it. Collapsed, the diagram is
   a map between aggregates; expanded, it shows what is inside. These are two
   zoom levels of one diagram rather than two separate diagrams
 - Hover to **highlight what a type relates to** and dim the rest
 - Drag to pan, wheel to zoom, `f` to fit on screen
+- Hover a truncated doc line or a method to read the full comment
 
 Use `-format json` to get just the analysis.
 
@@ -104,7 +108,8 @@ infers the rest.
 | Entity vs. value object | Pointer receivers plus a field of the type's own identifier type means entity |
 | Identifier pairing | An `Order` marked `//ddd:aggregate` pairs with `OrderID` |
 | References between aggregates | A field in aggregate A holding B's ID type means A → B |
-| Unclassified | Types no aggregate root can reach. Usually services and DTOs, but a forgotten marker shows up here too |
+| Unclassified | Types no aggregate root can reach. Grouped by what their structure says — interfaces, all-exported structs, fieldless structs — and folded so a service and its helpers read as one entry |
+| Methods | Exported methods with their signatures, and their doc comments on hover |
 
 `//ddd:id for=Order` states the pairing when naming departs from the convention.
 
@@ -133,12 +138,10 @@ MIT. See [LICENSE](LICENSE).
 
 ## Status
 
-Verified against a real Go DDD domain layer (3 aggregates, 17 files) for both
-analysis and rendering.
+Verified against a real Go DDD domain layer for both analysis and rendering.
 
 Not addressed yet:
 
-- Behavioural flow (use case → repository call chains)
+- Behavioural flow (use case → repository call chains) as a first-class view.
+  The folded unclassified list already shows its skeleton as a side effect
 - Layering violations
-- Breaking down the unclassified list, which mixes services, DTOs, and types
-  belonging to work still in progress

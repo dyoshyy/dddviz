@@ -22,6 +22,7 @@
               "type": "Line"
             }
           ],
+          "doc": "A chain four hops deep. Every link has to appear.",
           "depth": 1
         },
         {
@@ -154,7 +155,8 @@
           "name": "leg",
           "type": "Leg"
         }
-      ]
+      ],
+      "doc": "Shipment and Leg refer to each other. The walk must terminate."
     }
   ],
   "references": [],

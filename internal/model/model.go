@@ -49,6 +49,10 @@ type Aggregate struct {
 	Members []Member `json:"members"`
 	// Fields are the fields of the aggregate root itself.
 	Fields []Field `json:"fields"`
+	// Methods are the root's exported methods.
+	Methods []Method `json:"methods,omitempty"`
+	// Doc is the type's doc comment, with any //ddd: markers removed.
+	Doc string `json:"doc,omitempty"`
 }
 
 // Kind classifies what lives inside an aggregate.
@@ -65,11 +69,13 @@ const (
 // Sharing one node would draw edges across boundaries and blur the very
 // thing the diagram is about.
 type Member struct {
-	Name   string  `json:"name"`
-	Pkg    string  `json:"pkg"`
-	Pos    string  `json:"pos"`
-	Kind   Kind    `json:"kind"`
-	Fields []Field `json:"fields"`
+	Name    string   `json:"name"`
+	Pkg     string   `json:"pkg"`
+	Pos     string   `json:"pos"`
+	Kind    Kind     `json:"kind"`
+	Fields  []Field  `json:"fields"`
+	Methods []Method `json:"methods,omitempty"`
+	Doc     string   `json:"doc,omitempty"`
 	// Depth is the shortest distance from the root. 1 means a direct field.
 	Depth int `json:"depth"`
 }
@@ -78,6 +84,20 @@ type Member struct {
 type Field struct {
 	Name string `json:"name"`
 	Type string `json:"type"`
+}
+
+// Method is an exported method, which is how the rest of the code is allowed
+// to use the type. Unexported methods are internal wiring and are left out.
+type Method struct {
+	Name string `json:"name"`
+	// Signature is the parameter and result list, as "(id OrderID) bool".
+	Signature string `json:"signature"`
+	// Doc is the method's doc comment, if it has one.
+	Doc string `json:"doc,omitempty"`
+	// Pointer reports a pointer receiver. It is worth showing when a type
+	// mixes the two forms; on its own it does not mean the method mutates
+	// anything, since read-only methods often take a pointer for consistency.
+	Pointer bool `json:"pointer,omitempty"`
 }
 
 // Reference is an ID reference from one aggregate to another.

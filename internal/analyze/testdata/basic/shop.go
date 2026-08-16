@@ -1,6 +1,11 @@
 // Package shop covers the cases where classification is easy to get wrong.
 package shop
 
+// Order is a customer's purchase, and the unit of consistency here.
+//
+// The second paragraph should survive into the doc text, while the marker
+// below must not.
+//
 //ddd:aggregate
 type Order struct {
 	id       OrderID
@@ -12,6 +17,7 @@ type Order struct {
 
 type OrderID string
 
+// ID identifies the order.
 func (o *Order) ID() OrderID        { return o.id }
 func (o *Order) Total() Money       { return o.total }
 func (o *Order) Lines() []OrderLine { return o.lines }
@@ -44,6 +50,15 @@ type Money struct {
 }
 
 func (m Money) Amount() int64 { return m.amount }
+
+// Add returns the sum, leaving the receiver alone.
+func (m Money) Add(o Money) Money { return Money{m.amount + o.amount, m.currency} }
+
+// Charge mutates through a pointer, so Money mixes receiver forms.
+func (m *Money) Charge(n int64) { m.amount += n }
+
+// unexported must not appear in the diagram.
+func (m Money) unexported() {}
 
 // SKU and Quantity are value objects that wrap a primitive rather than a struct.
 type SKU string

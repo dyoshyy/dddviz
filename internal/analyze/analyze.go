@@ -78,6 +78,10 @@ type declared struct {
 	isAggregate bool
 	// idFor is the X in //ddd:id for=X, empty when absent.
 	idFor string
+	// doc is the type's doc comment with the //ddd: lines taken out.
+	doc string
+	// methodDocs maps a method name to its doc comment.
+	methodDocs map[string]string
 }
 
 func (d *declared) key() string { return d.pkgPath + "." + d.name }
@@ -102,8 +106,21 @@ func (a *analyzer) collect(p *packages.Package) {
 	a.inScope[p.PkgPath] = true
 
 	markers := map[string][]string{} // type name -> marker lines
+	docs := map[string]string{}      // type name -> doc comment
+	methodDocs := map[string]map[string]string{}
+
 	for _, syn := range p.Syntax {
 		for _, decl := range syn.Decls {
+			// Method doc comments live on the function declaration.
+			if fd, ok := decl.(*ast.FuncDecl); ok {
+				if recv := receiverTypeName(fd); recv != "" && fd.Doc != nil {
+					if methodDocs[recv] == nil {
+						methodDocs[recv] = map[string]string{}
+					}
+					methodDocs[recv][fd.Name.Name] = docText(fd.Doc)
+				}
+				continue
+			}
 			gd, ok := decl.(*ast.GenDecl)
 			if !ok || gd.Tok != token.TYPE {
 				continue
@@ -123,6 +140,9 @@ func (a *analyzer) collect(p *packages.Package) {
 				if ms := parseMarkers(doc); len(ms) > 0 {
 					markers[ts.Name.Name] = append(markers[ts.Name.Name], ms...)
 				}
+				if text := docText(doc); text != "" {
+					docs[ts.Name.Name] = text
+				}
 			}
 		}
 	}
@@ -138,11 +158,13 @@ func (a *analyzer) collect(p *packages.Package) {
 			continue
 		}
 		d := &declared{
-			named:   named,
-			pkgPath: p.PkgPath,
-			pkgName: p.Name,
-			name:    name,
-			pos:     a.fset.Position(obj.Pos()),
+			named:      named,
+			pkgPath:    p.PkgPath,
+			pkgName:    p.Name,
+			name:       name,
+			pos:        a.fset.Position(obj.Pos()),
+			doc:        docs[name],
+			methodDocs: methodDocs[name],
 		}
 		for _, m := range markers[name] {
 			switch {
@@ -157,6 +179,50 @@ func (a *analyzer) collect(p *packages.Package) {
 			a.aggregate[d.key()] = d
 		}
 	}
+}
+
+// receiverTypeName returns the type a method is declared on, peeling off a
+// pointer receiver. It returns "" for plain functions.
+func receiverTypeName(fd *ast.FuncDecl) string {
+	if fd.Recv == nil || len(fd.Recv.List) == 0 {
+		return ""
+	}
+	expr := fd.Recv.List[0].Type
+	if star, ok := expr.(*ast.StarExpr); ok {
+		expr = star.X
+	}
+	// A generic receiver arrives as Type[T]; the name is the part before it.
+	if idx, ok := expr.(*ast.IndexExpr); ok {
+		expr = idx.X
+	}
+	if id, ok := expr.(*ast.Ident); ok {
+		return id.Name
+	}
+	return ""
+}
+
+// docText renders a doc comment as plain text, dropping the //ddd: lines so
+// a marker never shows up as documentation.
+func docText(doc *ast.CommentGroup) string {
+	if doc == nil {
+		return ""
+	}
+	var lines []string
+	for _, c := range doc.List {
+		text := strings.TrimPrefix(c.Text, "//")
+		if strings.HasPrefix(strings.TrimSpace(text), "ddd:") {
+			continue
+		}
+		lines = append(lines, strings.TrimSpace(text))
+	}
+	// Trim blank lines that the marker may have left behind.
+	for len(lines) > 0 && lines[0] == "" {
+		lines = lines[1:]
+	}
+	for len(lines) > 0 && lines[len(lines)-1] == "" {
+		lines = lines[:len(lines)-1]
+	}
+	return strings.Join(lines, "\n")
 }
 
 // parseMarkers extracts the //ddd: lines from a doc comment.
@@ -506,6 +572,8 @@ func (a *analyzer) buildAggregate(root *declared, reached map[string]bool) (mode
 		Pos:     shortPos(root.pos),
 		Members: []model.Member{},
 		Fields:  a.fieldsOf(root),
+		Methods: a.methodsOf(root),
+		Doc:     root.doc,
 	}
 	if key, ok := a.idTypeOf(root); ok {
 		out.IDType = a.types[key].name
@@ -553,12 +621,14 @@ func (a *analyzer) buildAggregate(root *declared, reached map[string]bool) (mode
 				reached[key] = true
 
 				out.Members = append(out.Members, model.Member{
-					Name:   target.name,
-					Pkg:    target.pkgPath,
-					Pos:    shortPos(target.pos),
-					Kind:   a.classify(target),
-					Fields: a.fieldsOf(target),
-					Depth:  cur.depth + 1,
+					Name:    target.name,
+					Pkg:     target.pkgPath,
+					Pos:     shortPos(target.pos),
+					Kind:    a.classify(target),
+					Fields:  a.fieldsOf(target),
+					Methods: a.methodsOf(target),
+					Doc:     target.doc,
+					Depth:   cur.depth + 1,
 				})
 				queue = append(queue, item{d: target, depth: cur.depth + 1})
 			}
@@ -613,6 +683,39 @@ func (a *analyzer) classify(d *declared) model.Kind {
 		}
 	}
 	return model.KindVO
+}
+
+// methodsOf lists a type's exported methods.
+//
+// Exported methods are the type's contract -- what the rest of the code is
+// allowed to do with it. Unexported ones are internal wiring and would only
+// crowd the box.
+func (a *analyzer) methodsOf(d *declared) []model.Method {
+	var out []model.Method
+
+	for i := 0; i < d.named.NumMethods(); i++ {
+		fn := d.named.Method(i)
+		if !fn.Exported() {
+			continue
+		}
+		sig, ok := fn.Type().(*types.Signature)
+		if !ok {
+			continue
+		}
+		_, pointer := sig.Recv().Type().(*types.Pointer)
+
+		out = append(out, model.Method{
+			Name: fn.Name(),
+			// TypeString renders a signature as "func(a A) B"; the method
+			// name takes the place of the "func".
+			Signature: strings.TrimPrefix(a.typeString(d, sig), "func"),
+			Doc:       d.methodDocs[fn.Name()],
+			Pointer:   pointer,
+		})
+	}
+
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out
 }
 
 func (a *analyzer) fieldsOf(d *declared) []model.Field {

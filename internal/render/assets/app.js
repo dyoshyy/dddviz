@@ -16,6 +16,7 @@
   var HEAD = 24;
   var PAD = 9;
   var MIN_W = 130;
+  var DOC_ROW = 15;
 
   // Expansion state. Everything starts collapsed, so the first view is the
   // map between aggregates.
@@ -27,31 +28,79 @@
 
   // ---- sizing ------------------------------------------------------
 
+  // CJK characters take roughly two columns in a monospace face, and doc
+  // comments are where they turn up.
+  function visualLen(s) {
+    var n = 0;
+    for (var i = 0; i < s.length; i++) {
+      var c = s.charCodeAt(i);
+      n += c > 0x1100 && !(c >= 0x2000 && c < 0x2c00) ? 2 : 1;
+    }
+    return n;
+  }
+
   function fieldWidth(f) {
     return (f.name.length + f.type.length + 2) * CHAR;
   }
 
-  function widestField(fields) {
+  function methodWidth(m) {
+    return (m.name.length + m.signature.length + 2) * CHAR;
+  }
+
+  function widest(items, measure) {
     var w = 0;
-    for (var i = 0; i < fields.length; i++) w = Math.max(w, fieldWidth(fields[i]));
+    for (var i = 0; i < items.length; i++) w = Math.max(w, measure(items[i]));
     return w;
+  }
+
+  // The doc line is truncated to whatever width the members settle on, so it
+  // never drives the box wider on its own.
+  function docLine(doc, boxChars) {
+    if (!doc) return "";
+    var first = doc.split("\n")[0];
+    if (visualLen(first) <= boxChars) return first;
+    var out = "";
+    var used = 0;
+    for (var i = 0; i < first.length; i++) {
+      var add = first.charCodeAt(i) > 0x1100 ? 2 : 1;
+      if (used + add > boxChars - 1) break;
+      out += first[i];
+      used += add;
+    }
+    return out + "\u2026";
+  }
+
+  function bodyHeight(t) {
+    var h = 0;
+    if (t.doc) h += DOC_ROW + 4;
+    if (t.fields && t.fields.length) h += t.fields.length * ROW + 4;
+    if (t.methods && t.methods.length) h += t.methods.length * ROW + 8;
+    return h;
+  }
+
+  function bodyWidth(t) {
+    return Math.max(
+      widest(t.fields || [], fieldWidth),
+      widest(t.methods || [], methodWidth)
+    );
   }
 
   function memberSize(m) {
     var title = (m.name.length + m.kind.length + 3) * TITLE_CHAR;
-    var w = Math.max(title, widestField(m.fields)) + PAD * 2;
-    var h = HEAD + (m.fields.length ? m.fields.length * ROW + 6 : 0) + 8;
+    var w = Math.max(title, bodyWidth(m)) + PAD * 2;
+    var h = HEAD + bodyHeight(m) + 6;
     return { width: Math.max(MIN_W, Math.ceil(w)), height: Math.ceil(h) };
   }
 
-  // Height of an aggregate header: the name plus the root's own field rows.
+  // Height of an aggregate header: the name, the doc line, and the root's
+  // own fields and methods.
   function aggHeadHeight(agg) {
-    return HEAD + (agg.fields.length ? agg.fields.length * ROW + 6 : 0) + 8;
+    return HEAD + bodyHeight(agg) + 6;
   }
 
   function aggCollapsedSize(agg) {
     var title = (agg.name.length + (agg.idType || "").length + 4) * TITLE_CHAR;
-    var w = Math.max(title, widestField(agg.fields)) + PAD * 2;
+    var w = Math.max(title, bodyWidth(agg)) + PAD * 2;
     var count = agg.members.length ? plural(agg.members.length, "type") : "";
     return {
       width: Math.max(MIN_W + 30, Math.ceil(w), count.length * CHAR + PAD * 2),
@@ -138,15 +187,55 @@
     return t;
   }
 
-  // Draw the field rows, colouring the name apart from the type.
-  function drawFields(g, fields, x, y) {
-    for (var i = 0; i < fields.length; i++) {
-      var row = el("text", { x: x, y: y + i * ROW, class: "field" }, g);
-      var n = el("tspan", { class: "field-name" }, row);
-      n.textContent = fields[i].name;
-      var t = el("tspan", {}, row);
-      t.textContent = "  " + fields[i].type;
+  // Draw the doc line, the fields and the methods. Returns the y it ended at.
+  //
+  // Full doc text goes into a <title> so hovering shows what the truncated
+  // line left out, and method docs are reachable the same way without
+  // growing the box.
+  function drawBody(g, t, x, y, boxWidth) {
+    var boxChars = Math.floor((boxWidth - PAD * 2) / CHAR);
+
+    if (t.doc) {
+      var d = text(g, x, y + 10, "doc", docLine(t.doc, boxChars));
+      el("title", {}, d).textContent = t.doc;
+      y += DOC_ROW + 4;
     }
+
+    if (t.fields && t.fields.length) {
+      for (var i = 0; i < t.fields.length; i++) {
+        var row = el("text", { x: x, y: y + 11 + i * ROW, class: "field" }, g);
+        var n = el("tspan", { class: "field-name" }, row);
+        n.textContent = t.fields[i].name;
+        el("tspan", {}, row).textContent = "  " + t.fields[i].type;
+      }
+      y += t.fields.length * ROW + 4;
+    }
+
+    if (t.methods && t.methods.length) {
+      el("line", { x1: x, y1: y + 2, x2: x + boxWidth - PAD * 2, y2: y + 2, class: "rule dim" }, g);
+      y += 4;
+      // The receiver mark only earns its place when the type mixes the two.
+      // Marking every method of a type that is uniformly pointer-receiver
+      // says nothing, and a pointer receiver does not by itself mean the
+      // method mutates anything.
+      var mixed = t.methods.some(function (m) { return m.pointer; }) &&
+        t.methods.some(function (m) { return !m.pointer; });
+
+      for (var j = 0; j < t.methods.length; j++) {
+        var m = t.methods[j];
+        var mrow = el("text", { x: x, y: y + 11 + j * ROW, class: "method" }, g);
+        if (mixed) {
+          el("tspan", { class: "recv" }, mrow).textContent = m.pointer ? "\u2022" : "\u00a0";
+        }
+        el("tspan", { class: "method-name" }, mrow).textContent =
+          (mixed ? " " : "") + m.name;
+        el("tspan", {}, mrow).textContent = m.signature;
+        if (m.doc) el("title", {}, mrow).textContent = m.name + m.signature + "\n\n" + m.doc;
+      }
+      y += t.methods.length * ROW + 4;
+    }
+
+    return y;
   }
 
   function drawAggregate(parent, node) {
@@ -187,7 +276,8 @@
       var idt = text(g, node.width - PAD, 17, "agg-id", agg.idType);
       idt.setAttribute("text-anchor", "end");
     }
-    if (agg.fields.length) drawFields(g, agg.fields, PAD, HEAD + 12);
+    if (agg.doc) el("title", {}, g).textContent = agg.doc;
+    drawBody(g, agg, PAD, HEAD - 4, node.width);
 
     if (!isOpen && agg.members.length) {
       text(g, PAD, head + ROW, "badge", plural(agg.members.length, "type") + " \u25b8");
@@ -210,13 +300,13 @@
     text(g, PAD, 16, "member-title", m.name);
     var b = text(g, node.width - PAD, 16, "badge", m.kind.toUpperCase());
     b.setAttribute("text-anchor", "end");
-    if (m.fields.length) {
+    if (m.fields.length || m.methods || m.doc) {
       el(
         "line",
-        { x1: PAD, y1: HEAD - 2, x2: node.width - PAD, y2: HEAD - 2, class: "rule" },
+        { x1: PAD, y1: HEAD - 6, x2: node.width - PAD, y2: HEAD - 6, class: "rule" },
         g
       );
-      drawFields(g, m.fields, PAD, HEAD + 12);
+      drawBody(g, m, PAD, HEAD - 4, node.width);
     }
     return g;
   }
