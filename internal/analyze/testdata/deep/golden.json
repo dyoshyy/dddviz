@@ -1,0 +1,162 @@
+{
+  "meta": {
+    "title": "deep",
+    "packages": [
+      "example.com/deep"
+    ]
+  },
+  "aggregates": [
+    {
+      "name": "Order",
+      "pkg": "example.com/deep",
+      "pos": "deep.go:6",
+      "members": [
+        {
+          "name": "Basket",
+          "pkg": "example.com/deep",
+          "pos": "deep.go:14",
+          "kind": "vo",
+          "fields": [
+            {
+              "name": "line",
+              "type": "Line"
+            }
+          ],
+          "depth": 1
+        },
+        {
+          "name": "Discount",
+          "pkg": "example.com/deep",
+          "pos": "deep.go:16",
+          "kind": "vo",
+          "fields": [
+            {
+              "name": "rule",
+              "type": "Rule"
+            }
+          ],
+          "depth": 1
+        },
+        {
+          "name": "Line",
+          "pkg": "example.com/deep",
+          "pos": "deep.go:15",
+          "kind": "vo",
+          "fields": [
+            {
+              "name": "discount",
+              "type": "Discount"
+            }
+          ],
+          "depth": 1
+        },
+        {
+          "name": "Region",
+          "pkg": "example.com/deep",
+          "pos": "deep.go:20",
+          "kind": "vo",
+          "fields": [],
+          "depth": 1
+        },
+        {
+          "name": "Rule",
+          "pkg": "example.com/deep",
+          "pos": "deep.go:17",
+          "kind": "vo",
+          "fields": [
+            {
+              "name": "window",
+              "type": "Window"
+            }
+          ],
+          "depth": 2
+        },
+        {
+          "name": "Window",
+          "pkg": "example.com/deep",
+          "pos": "deep.go:18",
+          "kind": "vo",
+          "fields": [
+            {
+              "name": "days",
+              "type": "int"
+            }
+          ],
+          "depth": 3
+        }
+      ],
+      "fields": [
+        {
+          "name": "basket",
+          "type": "Basket"
+        },
+        {
+          "name": "lines",
+          "type": "[]Line"
+        },
+        {
+          "name": "byRegion",
+          "type": "map[Region]Discount"
+        }
+      ]
+    },
+    {
+      "name": "Shipment",
+      "pkg": "example.com/deep",
+      "pos": "deep.go:25",
+      "members": [
+        {
+          "name": "Leg",
+          "pkg": "example.com/deep",
+          "pos": "deep.go:27",
+          "kind": "vo",
+          "fields": [
+            {
+              "name": "shipment",
+              "type": "*Shipment"
+            },
+            {
+              "name": "tracking",
+              "type": "Tracking"
+            }
+          ],
+          "depth": 1
+        },
+        {
+          "name": "Tracking",
+          "pkg": "example.com/deep",
+          "pos": "deep.go:35",
+          "kind": "vo",
+          "fields": [
+            {
+              "name": "carrier",
+              "type": "Carrier"
+            }
+          ],
+          "depth": 2
+        },
+        {
+          "name": "Carrier",
+          "pkg": "example.com/deep",
+          "pos": "deep.go:36",
+          "kind": "vo",
+          "fields": [
+            {
+              "name": "name",
+              "type": "string"
+            }
+          ],
+          "depth": 3
+        }
+      ],
+      "fields": [
+        {
+          "name": "leg",
+          "type": "Leg"
+        }
+      ]
+    }
+  ],
+  "references": [],
+  "unclassified": []
+}

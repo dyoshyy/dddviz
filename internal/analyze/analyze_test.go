@@ -13,7 +13,7 @@ import (
 var update = flag.Bool("update", false, "rewrite the golden files")
 
 func TestAnalyze(t *testing.T) {
-	cases := []string{"basic"}
+	cases := []string{"basic", "deep"}
 
 	for _, name := range cases {
 		t.Run(name, func(t *testing.T) {
