@@ -1,9 +1,11 @@
-// Package analyze は Go のソースを読み、集約の構造を model.Graph に組み立てる。
+// Package analyze reads Go source and builds a model.Graph of the
+// aggregate structure.
 //
-// 設計の中核は「推論できるものは全部推論し、原理的に推論不能な1点だけ
-// 人間に聞く」こと。人間が書くのは //ddd:aggregate の1行だけで、
-// 集約の中身・Entity/VO の別・ID 型の対応づけ・集約間の参照は
-// すべてコードから導く。
+// The guiding idea is to infer everything that can be inferred and ask
+// the human only about the one thing that cannot. A human writes a single
+// //ddd:aggregate line; what an aggregate contains, whether a type is an
+// entity or a value object, which type is an identifier, and how
+// aggregates reference each other all come from the code.
 package analyze
 
 import (
@@ -25,7 +27,7 @@ const (
 	markerID        = "ddd:id"
 )
 
-// Load は dir を起点に patterns のパッケージを解析する。
+// Load analyzes the packages matching patterns, rooted at dir.
 func Load(dir string, patterns ...string) (*model.Graph, error) {
 	cfg := &packages.Config{
 		Mode: packages.NeedName | packages.NeedFiles | packages.NeedSyntax |
@@ -34,7 +36,7 @@ func Load(dir string, patterns ...string) (*model.Graph, error) {
 	}
 	pkgs, err := packages.Load(cfg, patterns...)
 	if err != nil {
-		return nil, fmt.Errorf("パッケージのロード: %w", err)
+		return nil, fmt.Errorf("loading packages: %w", err)
 	}
 	var loadErrs []string
 	packages.Visit(pkgs, nil, func(p *packages.Package) {
@@ -43,10 +45,10 @@ func Load(dir string, patterns ...string) (*model.Graph, error) {
 		}
 	})
 	if len(loadErrs) > 0 {
-		return nil, fmt.Errorf("解析対象にエラーがある:\n%s", strings.Join(loadErrs, "\n"))
+		return nil, fmt.Errorf("the code under analysis has errors:\n%s", strings.Join(loadErrs, "\n"))
 	}
 	if len(pkgs) == 0 {
-		return nil, fmt.Errorf("パッケージが見つからない: %v", patterns)
+		return nil, fmt.Errorf("no packages matched: %v", patterns)
 	}
 
 	a := &analyzer{
@@ -65,16 +67,16 @@ func Load(dir string, patterns ...string) (*model.Graph, error) {
 	return a.build(), nil
 }
 
-// declared は解析対象パッケージで宣言された名前付き型ひとつ。
+// declared is one named type declared in an analyzed package.
 type declared struct {
 	named   *types.Named
 	pkgPath string
 	pkgName string
 	name    string
 	pos     token.Position
-	// isAggregate は //ddd:aggregate が付いているか。
+	// isAggregate reports whether //ddd:aggregate is attached.
 	isAggregate bool
-	// idFor は //ddd:id for=X の X。無ければ空。
+	// idFor is the X in //ddd:id for=X, empty when absent.
 	idFor string
 }
 
@@ -82,23 +84,24 @@ func (d *declared) key() string { return d.pkgPath + "." + d.name }
 
 type analyzer struct {
 	fset *token.FileSet
-	// types は解析対象で宣言された全ての名前付き型。キーは pkgPath.Name。
+	// types holds every named type declared under analysis, keyed by pkgPath.Name.
 	types map[string]*declared
-	// inScope は解析対象パッケージのパス。
+	// inScope holds the import paths being analyzed.
 	inScope map[string]bool
-	// aggById は集約 ID 型のキーから、それが指す集約名への対応。
+	// aggById maps an aggregate ID type's key to the aggregate it identifies.
 	aggById map[string]string
-	// identity は識別子型のキー。集約 ID 型に加え、Entity の ID 型も含む。
-	// 箱として描く意味がないので、中身にも未分類にも出さない。
+	// identity holds identifier type keys: aggregate IDs plus entity IDs.
+	// Drawing them as boxes adds nothing, so they appear neither as
+	// members nor in the unclassified list.
 	identity map[string]bool
-	// aggregate は集約ルートのキーから宣言へ。
+	// aggregate maps an aggregate root's key to its declaration.
 	aggregate map[string]*declared
 }
 
 func (a *analyzer) collect(p *packages.Package) {
 	a.inScope[p.PkgPath] = true
 
-	markers := map[string][]string{} // 型名 → マーカー行
+	markers := map[string][]string{} // type name -> marker lines
 	for _, syn := range p.Syntax {
 		for _, decl := range syn.Decls {
 			gd, ok := decl.(*ast.GenDecl)
@@ -111,8 +114,9 @@ func (a *analyzer) collect(p *packages.Package) {
 					continue
 				}
 				doc := ts.Doc
-				// 単独宣言では doc が GenDecl 側に付く。括弧でまとめた
-				// 宣言の doc を個々の型に誤って配らないよう、1件のときだけ拾う。
+				// For a standalone declaration the doc sits on the GenDecl.
+				// Only borrow it when the block holds a single spec, so a
+				// grouped declaration's doc is not handed to every type in it.
 				if doc == nil && len(gd.Specs) == 1 {
 					doc = gd.Doc
 				}
@@ -155,7 +159,7 @@ func (a *analyzer) collect(p *packages.Package) {
 	}
 }
 
-// parseMarkers は doc コメントから //ddd: で始まる行を取り出す。
+// parseMarkers extracts the //ddd: lines from a doc comment.
 func parseMarkers(doc *ast.CommentGroup) []string {
 	if doc == nil {
 		return nil
@@ -170,10 +174,10 @@ func parseMarkers(doc *ast.CommentGroup) []string {
 	return out
 }
 
-// resolveIDTypes は ID 型と集約の対応づけを決める。
+// resolveIDTypes pairs identifier types with their aggregates.
 //
-// 既定では集約ルート X に対し XID という名前の型を対応させる。
-// 命名が規約から外れる場合だけ //ddd:id for=X で明示する。
+// By default an aggregate root X is paired with a type named XID.
+// //ddd:id for=X states the pairing when the naming departs from that.
 func (a *analyzer) resolveIDTypes() {
 	for _, agg := range a.aggregate {
 		candidate := agg.pkgPath + "." + agg.name + "ID"
@@ -181,7 +185,7 @@ func (a *analyzer) resolveIDTypes() {
 			a.aggById[candidate] = agg.name
 		}
 	}
-	// 明示指定は暗黙の対応づけより優先する。
+	// An explicit marker wins over the naming convention.
 	for key, d := range a.types {
 		if d.idFor == "" {
 			continue
@@ -194,11 +198,12 @@ func (a *analyzer) resolveIDTypes() {
 	}
 }
 
-// resolveIdentityTypes は識別子型を洗い出す。
+// resolveIdentityTypes collects the identifier types.
 //
-// XID という名前の型で X が解析対象に存在するものを識別子とみなす。
-// 集約 ID 型（Order → OrderID）だけでなく、集約の中の Entity の ID 型
-// （Shipment → ShipmentID）も含む。どちらも箱として描く価値がない。
+// A type named XID counts as an identifier when X also exists under
+// analysis. This covers aggregate IDs (Order -> OrderID) as well as the
+// IDs of entities inside an aggregate (Shipment -> ShipmentID).
+// Neither is worth a box of its own.
 func (a *analyzer) resolveIdentityTypes() {
 	for key := range a.aggById {
 		a.identity[key] = true
@@ -222,7 +227,7 @@ func (a *analyzer) build() *model.Graph {
 		Unclassified: []model.Unclassified{},
 	}
 
-	// どの集約からか到達できた型。未分類の判定に使う。
+	// Types reached from some aggregate. Drives the unclassified list.
 	reached := map[string]bool{}
 
 	for _, agg := range a.aggregate {
@@ -260,8 +265,8 @@ func (a *analyzer) build() *model.Graph {
 	return g
 }
 
-// meta は図の見出しに使う情報を組み立てる。
-// 表題は解析対象パッケージの共通接頭辞から取る。
+// meta builds the information shown in the diagram's heading.
+// The title comes from the common prefix of the analyzed packages.
 func (a *analyzer) meta() model.Meta {
 	pkgs := make([]string, 0, len(a.inScope))
 	for p := range a.inScope {
@@ -281,7 +286,7 @@ func (a *analyzer) meta() model.Meta {
 	return model.Meta{Title: title, Packages: pkgs}
 }
 
-// commonPrefix はパッケージパスの共通部分をスラッシュ区切りで返す。
+// commonPrefix returns the shared leading segments of the given paths.
 func commonPrefix(paths []string) string {
 	parts := strings.Split(paths[0], "/")
 	for _, p := range paths[1:] {
@@ -295,7 +300,7 @@ func commonPrefix(paths []string) string {
 	return strings.Join(parts, "/")
 }
 
-// buildAggregate は集約ルートから到達可能な型を幅優先でたどる。
+// buildAggregate walks breadth-first over the types reachable from a root.
 func (a *analyzer) buildAggregate(root *declared, reached map[string]bool) (model.Aggregate, []model.Reference) {
 	out := model.Aggregate{
 		Name:    root.name,
@@ -309,7 +314,7 @@ func (a *analyzer) buildAggregate(root *declared, reached map[string]bool) (mode
 	}
 
 	var refs []model.Reference
-	// seen は同一集約内での重複展開を防ぐ。集約をまたぐ重複は許す。
+	// seen prevents revisiting within one aggregate; across aggregates duplicates are intended.
 	seen := map[string]bool{root.key(): true}
 	type item struct {
 		d     *declared
@@ -335,11 +340,11 @@ func (a *analyzer) buildAggregate(root *declared, reached map[string]bool) (mode
 					}
 					continue
 				}
-				// 他の集約ルートの実体を直接持つ場合、境界を越えるので中身に含めない。
+				// Holding another root by value crosses a boundary, so it is not a member.
 				if target.isAggregate {
 					continue
 				}
-				// 識別子型は箱にせず、持ち主のフィールド表示に任せる。
+				// Identifier types get no box; the owner's field list already shows them.
 				if a.identity[key] {
 					continue
 				}
@@ -371,7 +376,7 @@ func (a *analyzer) buildAggregate(root *declared, reached map[string]bool) (mode
 	return out, refs
 }
 
-// idTypeOf は集約ルート自身の ID 型のキーを返す。
+// idTypeOf returns the key of the root's own identifier type.
 func (a *analyzer) idTypeOf(root *declared) (string, bool) {
 	for key, agg := range a.aggById {
 		if agg == root.name {
@@ -381,10 +386,10 @@ func (a *analyzer) idTypeOf(root *declared) (string, bool) {
 	return "", false
 }
 
-// classify は Entity か VO かを判定する。
+// classify decides between entity and value object.
 //
-// ポインタレシーバのメソッドを持ち、かつ自身の識別子型のフィールドを
-// 持つものを Entity とする。値として振る舞う型は VO。
+// A type with pointer-receiver methods that also carries a field of its
+// own identifier type is an entity. Types that behave as values are VOs.
 func (a *analyzer) classify(d *declared) model.Kind {
 	hasPointerRecv := false
 	for i := 0; i < d.named.NumMethods(); i++ {
@@ -424,8 +429,8 @@ func (a *analyzer) fieldsOf(d *declared) []model.Field {
 	return out
 }
 
-// namedTargets は型を剥がして、解析対象内の名前付き型を取り出す。
-// map は key と elem の両方をたどる。
+// namedTargets peels a type down to the named types under analysis.
+// Both the key and the element of a map are followed.
 func (a *analyzer) namedTargets(t types.Type) []*declared {
 	var out []*declared
 	seen := map[types.Type]bool{}
@@ -475,7 +480,8 @@ func structFields(named *types.Named) []*types.Var {
 	return out
 }
 
-// typeString は表示用の型名を作る。同一パッケージの型はパッケージ名を省く。
+// typeString renders a type for display, dropping the package qualifier
+// for types in the same package.
 func (a *analyzer) typeString(from *declared, t types.Type) string {
 	return types.TypeString(t, func(p *types.Package) string {
 		if p.Path() == from.pkgPath {

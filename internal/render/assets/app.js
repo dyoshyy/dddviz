@@ -1,29 +1,31 @@
-// dddviz の描画。ELK に座標を計算させ、SVG を組み立てる。
+// dddviz rendering. ELK computes the coordinates; this file builds the SVG.
 //
-// 集約はコンテナノード、中身はその子ノード。中身どうしは辺を持たないので
-// コンテナ内は layered ではなく rectpacking で詰める。層状にすると
-// 辺のない子が一列に並んで無駄に縦長になる。
+// An aggregate is a container node and its contents are that node's children.
+// The contents have no edges between them, so the inside of a container is
+// packed with rectpacking rather than layered: a layered pass would stack
+// edgeless children into one column and make the box needlessly tall.
 (function () {
   "use strict";
 
   var graph = window.__DDDVIZ__;
   var elk = new ELK();
 
-  var CHAR = 6.7; // 11px 等幅の実測近似
-  var TITLE_CHAR = 7.4; // 12-13px サンセリフ
+  var CHAR = 6.7; // measured width of the 11px monospace face
+  var TITLE_CHAR = 7.4; // 12-13px sans-serif
   var ROW = 16;
   var HEAD = 24;
   var PAD = 9;
   var MIN_W = 130;
 
-  // 展開状態。初期は全部たたんで集約間の地図から始める。
+  // Expansion state. Everything starts collapsed, so the first view is the
+  // map between aggregates.
   var expanded = new Set();
 
   var stage = document.getElementById("stage");
   var view = { x: 0, y: 0, k: 1 };
   var focus = null;
 
-  // ---- サイズ計算 -------------------------------------------------
+  // ---- sizing ------------------------------------------------------
 
   function fieldWidth(f) {
     return (f.name.length + f.type.length + 2) * CHAR;
@@ -42,7 +44,7 @@
     return { width: Math.max(MIN_W, Math.ceil(w)), height: Math.ceil(h) };
   }
 
-  // 集約ヘッダの高さ。名前と、ルート自身のフィールド行を収める。
+  // Height of an aggregate header: the name plus the root's own field rows.
   function aggHeadHeight(agg) {
     return HEAD + (agg.fields.length ? agg.fields.length * ROW + 6 : 0) + 8;
   }
@@ -50,14 +52,14 @@
   function aggCollapsedSize(agg) {
     var title = (agg.name.length + (agg.idType || "").length + 4) * TITLE_CHAR;
     var w = Math.max(title, widestField(agg.fields)) + PAD * 2;
-    var count = agg.members.length ? agg.members.length + " 型" : "";
+    var count = agg.members.length ? plural(agg.members.length, "type") : "";
     return {
       width: Math.max(MIN_W + 30, Math.ceil(w), count.length * CHAR + PAD * 2),
       height: aggHeadHeight(agg) + (agg.members.length ? ROW + 4 : 0),
     };
   }
 
-  // ---- ELK グラフの組み立て ---------------------------------------
+  // ---- building the ELK graph ---------------------------------------
 
   function buildElk() {
     var children = graph.aggregates.map(function (agg) {
@@ -117,7 +119,7 @@
     };
   }
 
-  // ---- SVG 組み立て -----------------------------------------------
+  // ---- building the SVG ----------------------------------------------
 
   var NS = "http://www.w3.org/2000/svg";
 
@@ -136,7 +138,7 @@
     return t;
   }
 
-  // フィールド行を描く。名前と型で色を分ける。
+  // Draw the field rows, colouring the name apart from the type.
   function drawFields(g, fields, x, y) {
     for (var i = 0; i < fields.length; i++) {
       var row = el("text", { x: x, y: y + i * ROW, class: "field" }, g);
@@ -188,7 +190,7 @@
     if (agg.fields.length) drawFields(g, agg.fields, PAD, HEAD + 12);
 
     if (!isOpen && agg.members.length) {
-      text(g, PAD, head + ROW, "badge", agg.members.length + " 型 ▸");
+      text(g, PAD, head + ROW, "badge", plural(agg.members.length, "type") + " \u25b8");
     }
     return g;
   }
@@ -260,7 +262,7 @@
 
     var root = el("g", { id: "camera" }, svg);
 
-    // 辺を先に描いてノードの下に敷く。
+    // Draw the edges first so they sit underneath the nodes.
     drawEdges(root, layout, 0, 0);
 
     layout.children.forEach(function (aggNode) {
@@ -280,7 +282,7 @@
     }
   }
 
-  // ---- ビュー操作 --------------------------------------------------
+  // ---- viewport -------------------------------------------------------
 
   function applyView() {
     var cam = document.getElementById("camera");
@@ -292,7 +294,8 @@
     }
   }
 
-  // 個別の展開では視点を保ち、全体を見る操作のときだけ収め直す。
+  // Expanding one aggregate keeps the viewport where it is; only the
+  // whole-diagram actions refit.
   var refit = true;
   var lastLayout = null;
 
@@ -306,8 +309,8 @@
     applyView();
   }
 
-  // ステージ側の操作は一度だけ結ぶ。描き直しのたびに足すと
-  // リスナーが積み上がって重くなる。
+  // Stage-level handlers are bound once. Rebinding them on every redraw
+  // would pile listeners up and slow the page down.
   function bindStage() {
     var drag = null;
 
@@ -344,15 +347,16 @@
       { passive: false }
     );
 
-    // f キーで全体を画面に収める。
+    // Press f to fit the whole diagram on screen.
     window.addEventListener("keydown", function (e) {
       if (e.key === "f" && lastLayout) fit(lastLayout);
     });
   }
 
-  // ノード側の操作は描き直しのたびに結び直す。
+  // Node-level handlers are rebound on every redraw.
   function bindNodes(svg) {
-    // 集約のクリックで展開／折りたたみ。中身のクリックは伝播させない。
+    // Clicking an aggregate expands or collapses it; clicks on its
+    // contents do not count.
     svg.querySelectorAll(".agg").forEach(function (g) {
       g.addEventListener("click", function (e) {
         if (e.target.closest(".member")) return;
@@ -363,7 +367,7 @@
       });
     });
 
-    // ホバーで関連する辺と集約を残し、他を沈める。
+    // Hovering keeps the related edges and aggregates lit and dims the rest.
     svg.querySelectorAll(".node").forEach(function (g) {
       g.addEventListener("mouseenter", function () {
         var agg = g.classList.contains("agg")
@@ -407,7 +411,7 @@
     });
   }
 
-  // ---- 実行 --------------------------------------------------------
+  // ---- entry ----------------------------------------------------------
 
   function layout() {
     elk
@@ -415,7 +419,7 @@
       .then(render)
       .catch(function (err) {
         stage.innerHTML =
-          '<pre style="padding:20px;color:var(--accent)">レイアウトに失敗: ' +
+          '<pre style="padding:20px;color:var(--accent)">layout failed: ' +
           String(err) +
           "</pre>";
       });
@@ -428,34 +432,35 @@
 
     var html =
       "<h1>" + escapeHtml(graph.meta.title) + "</h1>" +
-      '<div class="sub">' + aggCount + " 集約 / " + refCount + " 参照</div>";
+      '<div class="sub">' + plural(aggCount, "aggregate") +
+      " / " + plural(refCount, "reference") + "</div>";
 
     html +=
-      '<h2>操作</h2><div class="hint">' +
-      "集約をクリックで展開・折りたたみ<br>" +
-      "ホバーで関連を強調<br>" +
-      "ドラッグで移動、<kbd>wheel</kbd> で拡大縮小<br>" +
-      "<kbd>f</kbd> で全体を表示<br><br>" +
-      '<button class="link" id="all-open">すべて展開</button> / ' +
-      '<button class="link" id="all-close">すべて畳む</button>' +
+      '<h2>Controls</h2><div class="hint">' +
+      "Click an aggregate to expand or collapse<br>" +
+      "Hover to highlight what it relates to<br>" +
+      "Drag to pan, <kbd>wheel</kbd> to zoom<br>" +
+      "<kbd>f</kbd> to fit on screen<br><br>" +
+      '<button class="link" id="all-open">Expand all</button> / ' +
+      '<button class="link" id="all-close">Collapse all</button>' +
       "</div>";
 
     if (graph.unclassified.length) {
       html +=
-        "<h2>未分類 " + graph.unclassified.length + "</h2><ul>" +
+        "<h2>Unclassified " + graph.unclassified.length + "</h2><ul>" +
         graph.unclassified
           .map(function (u) {
             return "<li><b>" + escapeHtml(u.name) + "</b><br>" + escapeHtml(u.pos) + "</li>";
           })
           .join("") +
         "</ul>" +
-        '<div class="hint" style="margin-top:8px">どの集約からも到達できない型。' +
-        "ドメインサービスや DTO のことが多いが、マーカーの付け忘れもここに出る。</div>";
+        '<div class="hint" style="margin-top:8px">Types no aggregate root can reach. ' +
+        "Usually domain services and DTOs, but a forgotten marker shows up here too.</div>";
     }
 
     side.innerHTML = html;
 
-    // 全体を見る操作なので、描き直したあと画面に収め直す。
+    // These act on the whole diagram, so refit after redrawing.
     document.getElementById("all-open").addEventListener("click", function () {
       graph.aggregates.forEach(function (a) { expanded.add(a.name); });
       refit = true;
@@ -468,13 +473,75 @@
     });
   }
 
+  function plural(n, noun) {
+    return n + " " + noun + (n === 1 ? "" : "s");
+  }
+
   function escapeHtml(s) {
     return String(s).replace(/[&<>"]/g, function (c) {
       return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c];
     });
   }
 
+  // ---- live reload (-watch) -------------------------------------------
+
+  // The server sends a new graph rather than telling the page to reload, so
+  // the expanded aggregates survive an edit. Names that no longer exist are
+  // simply never looked up again.
+  function connectLive() {
+    var src = new EventSource("/events");
+
+    src.addEventListener("graph", function (e) {
+      graph = JSON.parse(e.data);
+      clearBanner();
+      buildSide();
+      layout();
+    });
+
+    src.addEventListener("failed", function (e) {
+      // Code mid-edit does not compile. Keep the last good diagram on
+      // screen and say why it is not moving.
+      showBanner(JSON.parse(e.data));
+    });
+
+    src.addEventListener("error", function () {
+      showBanner("Disconnected from dddviz. Is the -watch process still running?");
+    });
+  }
+
+  function showBanner(message) {
+    var b = document.getElementById("banner");
+    if (!b) {
+      b = document.createElement("div");
+      b.id = "banner";
+      document.getElementById("app").appendChild(b);
+    }
+    b.textContent = firstUsefulLine(message);
+    b.title = message;
+  }
+
+  // A build failure leads with a heading and the package name; the line
+  // worth showing is the first one that names a file and a position.
+  function firstUsefulLine(message) {
+    var lines = String(message).split("\n");
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i].trim();
+      if (/\.go:\d+(:\d+)?:/.test(line)) {
+        // Strip any leading directory noise so the file name stays visible
+        // when the banner has to truncate.
+        return line.replace(/^.*?([^/\\]+\.go:\d+)/, "$1");
+      }
+    }
+    return lines[0];
+  }
+
+  function clearBanner() {
+    var b = document.getElementById("banner");
+    if (b) b.remove();
+  }
+
   buildSide();
   bindStage();
   layout();
+  if (window.__DDDVIZ_LIVE__) connectLive();
 })();

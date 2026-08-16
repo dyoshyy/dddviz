@@ -10,7 +10,7 @@ import (
 	"github.com/dyoshyy/dddviz/internal/analyze"
 )
 
-var update = flag.Bool("update", false, "ゴールデンファイルを書き換える")
+var update = flag.Bool("update", false, "rewrite the golden files")
 
 func TestAnalyze(t *testing.T) {
 	cases := []string{"basic"}
@@ -33,18 +33,18 @@ func TestAnalyze(t *testing.T) {
 			golden := filepath.Join(dir, "golden.json")
 			if *update {
 				if err := os.WriteFile(golden, enc, 0o644); err != nil {
-					t.Fatalf("ゴールデン書き込み: %v", err)
+					t.Fatalf("writing golden: %v", err)
 				}
 				return
 			}
 
 			want, err := os.ReadFile(golden)
 			if err != nil {
-				t.Fatalf("ゴールデン読み込み（-update で生成できる）: %v", err)
+				t.Fatalf("reading golden (run with -update to create it): %v", err)
 			}
 
 			if string(enc) != string(want) {
-				t.Errorf("解析結果がゴールデンと一致しない\n--- got\n%s\n--- want\n%s", enc, want)
+				t.Errorf("analysis does not match the golden file\n--- got\n%s\n--- want\n%s", enc, want)
 			}
 		})
 	}

@@ -9,8 +9,8 @@ import (
 	"github.com/dyoshyy/dddviz/internal/render"
 )
 
-// 出力は 1.6MB あるためゴールデン比較はしない。
-// 自己完結であることと、データが埋まっていることだけ確かめる。
+// The output is about 1.6MB, so there is no golden comparison here.
+// This only checks that the page is self-contained and carries the data.
 func TestHTML(t *testing.T) {
 	g := &model.Graph{
 		Meta: model.Meta{Title: "training", Packages: []string{"example.com/x/training"}},
@@ -36,25 +36,25 @@ func TestHTML(t *testing.T) {
 	for _, want := range []string{
 		"<title>training</title>",
 		"window.__DDDVIZ__",
-		"Order", // 解析結果が埋まっている
+		"Order", // the analysis result is embedded
 		"OrderID",
 		"PricingService",
-		"ELK",    // elkjs が同梱されている
-		"#stage", // スタイルが同梱されている
+		"ELK",    // elkjs ships with the page
+		"#stage", // the stylesheet ships with the page
 	} {
 		if !strings.Contains(out, want) {
-			t.Errorf("出力に %q が含まれない", want)
+			t.Errorf("output does not contain %q", want)
 		}
 	}
 
-	// 外部への参照が残っていれば自己完結が崩れている。
+	// Any remaining external reference would break self-containment.
 	for _, bad := range []string{"src=\"http", "href=\"http", "//unpkg.com", "//cdn."} {
 		if strings.Contains(out, bad) {
-			t.Errorf("外部参照が残っている: %q", bad)
+			t.Errorf("external reference left in the output: %q", bad)
 		}
 	}
 
 	if buf.Len() < 500_000 {
-		t.Errorf("elkjs が埋め込まれていない可能性がある（%d バイト）", buf.Len())
+		t.Errorf("elkjs may not be embedded (%d bytes)", buf.Len())
 	}
 }

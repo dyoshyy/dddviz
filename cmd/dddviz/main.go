@@ -1,4 +1,4 @@
-// Command dddviz は Go の DDD コードから集約の地図を描く。
+// Command dddviz draws a map of the aggregates in a Go DDD codebase.
 package main
 
 import (
@@ -13,6 +13,7 @@ import (
 
 	"github.com/dyoshyy/dddviz/internal/analyze"
 	"github.com/dyoshyy/dddviz/internal/render"
+	"github.com/dyoshyy/dddviz/internal/watch"
 )
 
 func main() {
@@ -24,28 +25,42 @@ func main() {
 
 func run() error {
 	var (
-		dir    = flag.String("C", ".", "解析の起点ディレクトリ")
-		out    = flag.String("o", "", "出力先ファイル（省略時は標準出力）")
-		format = flag.String("format", "", "出力形式 html または json（省略時は -o の拡張子から決める）")
+		dir     = flag.String("C", ".", "directory to analyze from")
+		out     = flag.String("o", "", "output file (defaults to stdout)")
+		format  = flag.String("format", "", "output format, html or json (inferred from -o when unset)")
+		watchOn = flag.Bool("watch", false, "serve the diagram and redraw it as the code changes")
+		port    = flag.Int("port", 0, "port for -watch (0 picks a free one)")
+		noOpen  = flag.Bool("no-open", false, "with -watch, do not open a browser")
 	)
 	flag.Usage = func() {
-		fmt.Fprintln(os.Stderr, "使い方: dddviz [オプション] [パッケージパターン...]")
-		fmt.Fprintln(os.Stderr, "\n例:")
+		fmt.Fprintln(os.Stderr, "usage: dddviz [flags] [packages...]")
+		fmt.Fprintln(os.Stderr, "\nexamples:")
 		fmt.Fprintln(os.Stderr, "  dddviz -C ~/repos/myapp -o docs/domain.html ./internal/...")
+		fmt.Fprintln(os.Stderr, "  dddviz -watch -C ~/repos/myapp ./internal/...")
 		fmt.Fprintln(os.Stderr, "  dddviz -format json ./internal/...")
-		fmt.Fprintln(os.Stderr, "\nオプション:")
+		fmt.Fprintln(os.Stderr, "\nflags:")
 		flag.PrintDefaults()
 	}
 	flag.Parse()
 
-	f, err := resolveFormat(*format, *out)
-	if err != nil {
-		return err
-	}
-
 	patterns := flag.Args()
 	if len(patterns) == 0 {
 		patterns = []string{"./..."}
+	}
+
+	if *watchOn {
+		return watch.Serve(watch.Options{
+			Dir:      *dir,
+			Patterns: patterns,
+			Port:     *port,
+			OpenPage: !*noOpen,
+			Log:      os.Stderr,
+		})
+	}
+
+	f, err := resolveFormat(*format, *out)
+	if err != nil {
+		return err
 	}
 
 	graph, err := analyze.Load(*dir, patterns...)
@@ -68,23 +83,23 @@ func run() error {
 		enc := json.NewEncoder(w)
 		enc.SetIndent("", "  ")
 		if err := enc.Encode(graph); err != nil {
-			return fmt.Errorf("JSON への変換: %w", err)
+			return fmt.Errorf("encoding JSON: %w", err)
 		}
 	}
 
 	if *out != "" {
-		fmt.Fprintf(os.Stderr, "%s に書き出した（%d 集約 / %d 参照 / 未分類 %d）\n",
+		fmt.Fprintf(os.Stderr, "wrote %s (%d aggregates, %d references, %d unclassified)\n",
 			*out, len(graph.Aggregates), len(graph.References), len(graph.Unclassified))
 	}
 	return nil
 }
 
-// resolveFormat は出力形式を決める。明示指定が無ければ出力先の拡張子から、
-// それも無ければ標準出力向けに json を選ぶ。
+// resolveFormat picks the output format: an explicit flag first, then the
+// output file's extension, then JSON for stdout.
 func resolveFormat(format, out string) (string, error) {
 	if format != "" {
 		if format != "html" && format != "json" {
-			return "", fmt.Errorf("未対応の形式: %s（html か json）", format)
+			return "", fmt.Errorf("unsupported format %q (want html or json)", format)
 		}
 		return format, nil
 	}
@@ -96,7 +111,7 @@ func resolveFormat(format, out string) (string, error) {
 	case "":
 		return "json", nil
 	default:
-		return "", fmt.Errorf("拡張子から形式を判断できない: %s（-format で指定）", out)
+		return "", fmt.Errorf("cannot infer a format from %q (use -format)", out)
 	}
 }
 
@@ -107,12 +122,12 @@ func openOutput(path string) (io.Writer, func(), error) {
 	}
 	if dir := filepath.Dir(path); dir != "." {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
-			return nil, nil, fmt.Errorf("出力先ディレクトリの作成: %w", err)
+			return nil, nil, fmt.Errorf("creating output directory: %w", err)
 		}
 	}
 	fh, err := os.Create(path)
 	if err != nil {
-		return nil, nil, fmt.Errorf("出力先を開けない: %w", err)
+		return nil, nil, fmt.Errorf("opening output file: %w", err)
 	}
 	bw := bufio.NewWriter(fh)
 	return bw, func() { bw.Flush(); fh.Close() }, nil

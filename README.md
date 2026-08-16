@@ -1,14 +1,16 @@
 # dddviz
 
-Go の DDD コードから集約の構造を抽出する。
+Draw a map of the aggregates in a Go DDD codebase.
 
-> **名前は仮です。** POC で手応えを確かめてから考え直します。
+> **The name is a placeholder.** It will be reconsidered once the tool has
+> been lived with for a while.
 
-## 何をするか
+## What it does
 
-コードに `//ddd:aggregate` を書くのは集約ルートだけ。
-それ以外——集約の中身、Entity と VO の別、ID 型の対応づけ、集約間の参照——は
-すべてコードから推論します。
+The only thing you write in your code is `//ddd:aggregate`, on aggregate
+roots. Everything else — what an aggregate contains, which types are
+entities and which are value objects, how identifier types pair up, and how
+aggregates reference each other — is inferred.
 
 ```go
 //ddd:aggregate
@@ -22,71 +24,97 @@ type Order struct {
 
 ```console
 $ dddviz -C ~/repos/myapp -o docs/domain.html ./internal/...
-docs/domain.html に書き出した（3 集約 / 2 参照 / 未分類 23）
+wrote docs/domain.html (3 aggregates, 2 references, 23 unclassified)
 ```
 
-出るのは依存なしの HTML 1 枚です。集約が枠になり、中身が入れ子で入り、
-集約間は ID 参照の矢印でつながります。
+The output is one HTML file with no dependencies. Aggregates become frames,
+their contents nest inside, and ID references connect them.
 
-- 集約をクリックで**展開・折りたたみ**。畳めば集約間の地図、開けば中身の詳細。
-  別々の図ではなく、同じ図の粒度切り替えとして扱います
-- ホバーで**関連する辺と集約を強調**し、他を沈めます
-- ドラッグで移動、ホイールで拡大縮小、`f` で全体表示
+- Click an aggregate to **expand or collapse** it. Collapsed, the diagram is
+  a map between aggregates; expanded, it shows what is inside. These are two
+  zoom levels of one diagram rather than two separate diagrams
+- Hover to **highlight what a type relates to** and dim the rest
+- Drag to pan, wheel to zoom, `f` to fit on screen
 
-`-format json` で解析結果だけを取り出すこともできます。
+Use `-format json` to get just the analysis.
 
-## なぜマーカーが1つ必要なのか
+## Watching
 
-「集約ルートは参照グラフの根だから推論できる」——実際に当てると外れます。
+```console
+$ dddviz -watch -C ~/repos/myapp ./internal/...
+dddviz: serving http://127.0.0.1:41533 (3 aggregates, 2 references)
+dddviz: watching /home/you/repos/myapp -- press Ctrl-C to stop
+```
 
-実在のコードベースで「被参照ゼロの型がルート」を試したところ、
-検出されたのはコンストラクタ引数の DTO、ドメインサービス、入出力 DTO ばかりで、
-本物の集約ルートは一つも含まれませんでした。
+This serves the diagram, opens a browser, and redraws whenever the code
+changes. `-port` fixes the port, `-no-open` skips the browser.
 
-Go では**集約ルートこそ ID 経由で他から参照される**ので、被参照数はゼロになりません。
-ゼロになるのは DTO とサービスのほうです。仮説がひっくり返っている。
+The server pushes a new diagram rather than reloading the page, so **the
+aggregates you had expanded stay expanded** across an edit. While the code
+does not compile — which is most of the time while you are typing — the last
+good diagram stays on screen and the build error appears in a banner.
 
-「ID 型を持つ型がルート」という別案も、`ProgramID` を持たない `Program` を取り逃します。
+No file-watching or WebSocket library is involved. `go install` is the whole
+setup, and keeping it that way is worth more than either dependency.
 
-そこで **原理的に推論不能な1点だけ人間に聞き、残りは全部推論する** 方針を取りました。
+## Why one marker is necessary
 
-## 推論しているもの
+"An aggregate root is a root of the reference graph, so it can be inferred" —
+in practice this does not hold.
 
-| 導くもの | 導き方 |
+Trying "types nothing references are roots" against a real codebase turned up
+constructor-argument DTOs, domain services and request/response DTOs, and not
+one actual aggregate root.
+
+The reason is structural: in Go it is **aggregate roots that get referenced**,
+by ID, so their reference count is never zero. The types with no references
+are the DTOs and the services. The hypothesis is backwards.
+
+"Types that own an ID type are roots" fails differently — it misses a
+`Program` that has no `ProgramID`.
+
+So dddviz asks the human about the one thing that cannot be inferred, and
+infers the rest.
+
+## What is inferred
+
+| Inferred | How |
 |---|---|
-| 集約の中身 | ルートからフィールドの型をたどって到達可能な型のうち、他の集約ルートでないもの |
-| Entity か VO か | ポインタレシーバを持ち、かつ自身の識別子型のフィールドを持つものが Entity |
-| ID 型の対応づけ | `//ddd:aggregate` の付いた `Order` に対し `OrderID` を自動対応 |
-| 集約間の参照 | 集約 A のフィールドに集約 B の ID 型が現れたら A → B |
-| 未分類 | どの集約ルートからも到達できない型。サービスや DTO が並ぶが、マーカーの付け忘れもここに出る |
+| Aggregate contents | Types reachable by following fields from the root, minus other aggregate roots |
+| Entity vs. value object | Pointer receivers plus a field of the type's own identifier type means entity |
+| Identifier pairing | An `Order` marked `//ddd:aggregate` pairs with `OrderID` |
+| References between aggregates | A field in aggregate A holding B's ID type means A → B |
+| Unclassified | Types no aggregate root can reach. Usually services and DTOs, but a forgotten marker shows up here too |
 
-命名が規約から外れる場合だけ `//ddd:id for=Order` で明示できます。
+`//ddd:id for=Order` states the pairing when naming departs from the convention.
 
-マーカーの接頭辞をツール名ではなく `ddd:` にしているのは、
-コードに書き込ませる以上、中立な記法にしてベンダーロックを避けるためです。
+The marker is prefixed `ddd:` rather than with the tool's name. It goes into
+your source, so it should stay neutral rather than tie the code to one tool.
 
-## 出力が 1 枚に閉じている理由
+## Why the page is one file
 
-elkjs をバイナリに埋め込んでいるので、生成される HTML は約 1.6MB あります。
-レイアウトを事前計算して JS を無くすこともできますが、
-折りたたみのたびに再レイアウトが要るため、その組み合わせ分の座標を持つことになり成立しません。
+elkjs is embedded in the binary, which puts the generated HTML at around
+1.6MB. Precomputing the layout would remove the need for JS, but every
+expand and collapse relayouts, so that would mean storing coordinates for
+every combination of open frames.
 
-CDN も外部 CSS も参照しないので、生成物をそのままリポジトリに置けます。
+Nothing is fetched from a CDN and no stylesheet is external, so the output
+can be committed straight into a repository.
 
-## 状態
-
-POC 2 まで。実在のコードベース（Go の DDD ドメイン層、3 集約 / 17 ファイル）で
-解析と描画の両方を確認しています。
-
-まだ扱っていないもの:
-
-- 振る舞いの流れ（UseCase → Repository の呼び出し連鎖）
-- レイヤー違反の検出
-- ファイル監視によるライブ更新
-- 未分類の内訳表示（サービス・DTO・実装途中の型が混ざる）
-
-## インストール
+## Install
 
 ```console
 $ go install github.com/dyoshyy/dddviz/cmd/dddviz@latest
 ```
+
+## Status
+
+Verified against a real Go DDD domain layer (3 aggregates, 17 files) for both
+analysis and rendering.
+
+Not addressed yet:
+
+- Behavioural flow (use case → repository call chains)
+- Layering violations
+- Breaking down the unclassified list, which mixes services, DTOs, and types
+  belonging to work still in progress

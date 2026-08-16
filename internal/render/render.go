@@ -1,7 +1,8 @@
-// Package render は model.Graph を単一の HTML に書き出す。
+// Package render writes a model.Graph out as a single HTML file.
 //
-// JS と CSS と elkjs をバイナリに埋め込み、解析結果の JSON ごと
-// 1 枚に詰める。出力を開くのに何も要らない状態を保つ。
+// The JS, the CSS and elkjs are embedded in the binary and packed into one
+// page along with the analysis JSON, so that opening the output requires
+// nothing else.
 package render
 
 import (
@@ -18,35 +19,47 @@ import (
 //go:embed all:assets
 var assets embed.FS
 
-// HTML は graph を描画する自己完結の HTML を w に書く。
+// Options controls how the page behaves once it is open.
+type Options struct {
+	// Live makes the page subscribe to /events and redraw whenever the
+	// server pushes a new graph. Used by -watch.
+	Live bool
+}
+
+// HTML writes a self-contained page rendering graph to w.
 func HTML(w io.Writer, graph *model.Graph) error {
+	return Page(w, graph, Options{})
+}
+
+// Page writes the rendered graph to w with the given options.
+func Page(w io.Writer, graph *model.Graph, opt Options) error {
 	tmplSrc, err := assets.ReadFile("assets/template.html")
 	if err != nil {
-		return fmt.Errorf("テンプレートの読み込み: %w", err)
+		return fmt.Errorf("reading template: %w", err)
 	}
 	css, err := assets.ReadFile("assets/style.css")
 	if err != nil {
-		return fmt.Errorf("CSS の読み込み: %w", err)
+		return fmt.Errorf("reading CSS: %w", err)
 	}
 	js, err := assets.ReadFile("assets/app.js")
 	if err != nil {
-		return fmt.Errorf("JS の読み込み: %w", err)
+		return fmt.Errorf("reading JS: %w", err)
 	}
 	elk, err := assets.ReadFile("assets/elk.bundled.js")
 	if err != nil {
-		return fmt.Errorf("elkjs の読み込み: %w", err)
+		return fmt.Errorf("reading elkjs: %w", err)
 	}
 
-	// MarshalIndent は既定で <, >, & を < 等に置き換えるので、
-	// script 要素の中に置いてもタグとして解釈されない。
+	// encoding/json escapes <, > and & by default, so the payload is safe
+	// to place inside a script element.
 	data, err := json.Marshal(graph)
 	if err != nil {
-		return fmt.Errorf("JSON への変換: %w", err)
+		return fmt.Errorf("encoding JSON: %w", err)
 	}
 
 	tmpl, err := template.New("page").Parse(string(tmplSrc))
 	if err != nil {
-		return fmt.Errorf("テンプレートの解析: %w", err)
+		return fmt.Errorf("parsing template: %w", err)
 	}
 
 	title := graph.Meta.Title
@@ -61,9 +74,10 @@ func HTML(w io.Writer, graph *model.Graph) error {
 		"JS":    string(js),
 		"ELK":   string(elk),
 		"Data":  string(data),
+		"Live":  opt.Live,
 	})
 	if err != nil {
-		return fmt.Errorf("テンプレートの展開: %w", err)
+		return fmt.Errorf("executing template: %w", err)
 	}
 
 	_, err = w.Write(buf.Bytes())

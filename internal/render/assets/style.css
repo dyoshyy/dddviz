@@ -46,13 +46,13 @@ html, body {
   overflow: hidden;
 }
 
-#app { display: flex; height: 100%; }
+#app { display: flex; height: 100%; position: relative; }
 
 #stage { flex: 1; position: relative; overflow: hidden; cursor: grab; }
 #stage.dragging { cursor: grabbing; }
 #stage svg { display: block; width: 100%; height: 100%; }
 
-/* --- ノード --- */
+/* --- nodes --- */
 
 .agg > rect {
   fill: var(--agg-bg);
@@ -91,7 +91,7 @@ html, body {
 
 .rule { stroke: var(--line); stroke-width: 1; }
 
-/* --- 辺 --- */
+/* --- edges --- */
 
 .edge path {
   fill: none;
@@ -106,7 +106,7 @@ html, body {
 .edge:hover .edge-label { opacity: 1; }
 .edge:hover path { stroke: var(--accent); stroke-width: 2; }
 
-/* --- ハイライト --- */
+/* --- highlighting --- */
 
 svg.has-focus .fade { opacity: var(--dim); }
 .hl > rect { stroke: var(--accent) !important; stroke-width: 2 !important; }
@@ -115,7 +115,7 @@ svg.has-focus .fade { opacity: var(--dim); }
 
 .agg, .member { cursor: pointer; }
 
-/* --- サイドパネル --- */
+/* --- side panel --- */
 
 #side {
   width: 260px;
@@ -175,4 +175,25 @@ button.link {
   font-size: 11px;
   cursor: pointer;
   text-decoration: underline;
+}
+
+/* --- live reload banner (-watch) --- */
+
+#banner {
+  position: absolute;
+  left: 50%;
+  bottom: 22px;
+  transform: translateX(-50%);
+  max-width: min(70ch, 70vw);
+  padding: 8px 14px;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--ink);
+  font: 11px/1.5 ui-monospace, monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.18);
+  z-index: 10;
 }

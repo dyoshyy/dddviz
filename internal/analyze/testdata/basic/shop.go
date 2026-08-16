@@ -1,4 +1,4 @@
-// Package shop は解析ルールの判定が割れる箇所を一通り含む。
+// Package shop covers the cases where classification is easy to get wrong.
 package shop
 
 //ddd:aggregate
@@ -16,7 +16,7 @@ func (o *Order) ID() OrderID        { return o.id }
 func (o *Order) Total() Money       { return o.total }
 func (o *Order) Lines() []OrderLine { return o.lines }
 
-// OrderLine は値レシーバのみ。VO として分類されるべき。
+// OrderLine has value receivers only, so it must classify as a VO.
 type OrderLine struct {
 	sku SKU
 	qty Quantity
@@ -25,9 +25,9 @@ type OrderLine struct {
 func (l OrderLine) SKU() SKU      { return l.sku }
 func (l OrderLine) Qty() Quantity { return l.qty }
 
-// Shipment はポインタレシーバと ShipmentID フィールドを持つ。
-// ただし //ddd:aggregate が無いので集約ルートではなく、Order の中の Entity。
-// ShipmentID も集約 ID 型ではないので参照矢印は生まれない。
+// Shipment has a pointer receiver and a ShipmentID field, but no
+// //ddd:aggregate marker. It is an entity inside Order rather than a root,
+// and ShipmentID is not an aggregate ID, so it draws no reference arrow.
 type Shipment struct {
 	id      ShipmentID
 	carrier string
@@ -37,7 +37,7 @@ type ShipmentID string
 
 func (s *Shipment) ID() ShipmentID { return s.id }
 
-// Money は複数の集約から到達される VO。両方に重複して現れるべき。
+// Money is reachable from two aggregates and must appear under both.
 type Money struct {
 	amount   int64
 	currency string
@@ -45,7 +45,7 @@ type Money struct {
 
 func (m Money) Amount() int64 { return m.amount }
 
-// SKU と Quantity は struct でないプリミティブラッパーの VO。
+// SKU and Quantity are value objects that wrap a primitive rather than a struct.
 type SKU string
 
 type Quantity int
@@ -61,12 +61,12 @@ type CustomerID string
 
 func (c *Customer) ID() CustomerID { return c.id }
 
-// PricingService はどの集約からも到達できない。未分類に出るべき。
+// PricingService is reachable from no aggregate, so it lands in unclassified.
 type PricingService struct{}
 
 func (PricingService) Price(sku SKU) Money { return Money{} }
 
-// PlaceOrderRequest も到達不能な DTO。
+// PlaceOrderRequest is an unreachable DTO.
 type PlaceOrderRequest struct {
 	CustomerID CustomerID
 	Lines      []OrderLine

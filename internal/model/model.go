@@ -1,10 +1,10 @@
-// Package model は解析結果の中立表現を定義する。
+// Package model defines the neutral representation of an analysis result.
 //
-// analyze はこの型のグラフを組み立てて終わり、render はそれを描くだけ。
-// 両者はこの JSON を挟んで完全に分離する。
+// analyze builds this graph and stops there; render only draws it.
+// The two are separated by this JSON and never reach across it.
 package model
 
-// Graph は解析対象全体の集約構造を表す。
+// Graph is the aggregate structure of everything that was analyzed.
 type Graph struct {
 	Meta         Meta           `json:"meta"`
 	Aggregates   []Aggregate    `json:"aggregates"`
@@ -12,26 +12,27 @@ type Graph struct {
 	Unclassified []Unclassified `json:"unclassified"`
 }
 
-// Meta は図の見出しに使う情報。
+// Meta carries the information shown in the diagram's heading.
 type Meta struct {
 	Title string `json:"title"`
-	// Packages は解析対象になったパッケージのパス。
+	// Packages lists the import paths that were analyzed.
 	Packages []string `json:"packages"`
 }
 
-// Aggregate は //ddd:aggregate が付いた型と、そこから到達できる中身。
+// Aggregate is a type marked with //ddd:aggregate together with
+// everything reachable from it.
 type Aggregate struct {
 	Name string `json:"name"`
 	Pkg  string `json:"pkg"`
 	Pos  string `json:"pos"`
-	// IDType は この集約の識別子型の名前。無ければ空。
+	// IDType is the name of this aggregate's identifier type, if any.
 	IDType  string   `json:"idType,omitempty"`
 	Members []Member `json:"members"`
-	// Fields は集約ルート自身のフィールド。
+	// Fields are the fields of the aggregate root itself.
 	Fields []Field `json:"fields"`
 }
 
-// Kind は集約の中身の分類。
+// Kind classifies what lives inside an aggregate.
 type Kind string
 
 const (
@@ -39,38 +40,39 @@ const (
 	KindVO     Kind = "vo"
 )
 
-// Member は集約ルートから到達できる型。
+// Member is a type reachable from an aggregate root.
 //
-// 同じ型が複数の集約から到達可能なら、それぞれの集約に重複して現れる。
-// 共有ノードにすると枠をまたぐ辺が生まれ、境界という図の主題がぼやけるため。
+// A type reachable from several aggregates appears once under each of them.
+// Sharing one node would draw edges across boundaries and blur the very
+// thing the diagram is about.
 type Member struct {
 	Name   string  `json:"name"`
 	Pkg    string  `json:"pkg"`
 	Pos    string  `json:"pos"`
 	Kind   Kind    `json:"kind"`
 	Fields []Field `json:"fields"`
-	// Depth はルートからの最短到達段数。1 が直接のフィールド。
+	// Depth is the shortest distance from the root. 1 means a direct field.
 	Depth int `json:"depth"`
 }
 
-// Field は構造体のフィールド一つ。
+// Field is a single struct field.
 type Field struct {
 	Name string `json:"name"`
 	Type string `json:"type"`
 }
 
-// Reference は集約から集約への ID 参照。
+// Reference is an ID reference from one aggregate to another.
 type Reference struct {
 	From string `json:"from"`
 	To   string `json:"to"`
-	// Via は参照が生まれた場所。"Program.exercises []ExerciseID" の形。
+	// Via is where the reference comes from, as "Order.customer CustomerID".
 	Via string `json:"via"`
 }
 
-// Unclassified はどの集約ルートからも到達できなかった型。
+// Unclassified is a type that no aggregate root can reach.
 //
-// 多くはドメインサービスや DTO で正常だが、//ddd:aggregate の
-// 付け忘れもここに現れる。
+// Most are domain services or DTOs and perfectly fine, but a forgotten
+// //ddd:aggregate marker shows up here too.
 type Unclassified struct {
 	Name string `json:"name"`
 	Pkg  string `json:"pkg"`
