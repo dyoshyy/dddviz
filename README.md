@@ -59,6 +59,7 @@ half means much alone, and a type declaration states neither.
   a map between aggregates; expanded, it shows what is inside. These are two
   zoom levels of one diagram rather than two separate diagrams
 - Hover to **highlight what a type relates to** and dim the rest
+- **Show in diagram** puts the services beside the aggregates they work on
 - Drag to pan, wheel to zoom, `f` to fit on screen
 - Hover a truncated doc line or a method to read the full comment
 
@@ -131,7 +132,7 @@ infers the rest.
 | Unclassified | Types no aggregate root can reach. Grouped by what their structure says — interfaces, all-exported structs, fieldless structs — and folded so a service and its helpers read as one entry |
 | Methods | Exported methods with their signatures, and their doc comments on hover |
 | Invariants | The rules a constructor or validating method enforces, read from the errors it returns. Wrapped errors are skipped, and the lead-in every message repeats is dropped |
-| What a type touches | For types outside every aggregate, which aggregates their methods take or return. A policy object and a stateless service look identical from the outside; what they work on does not |
+| Services | Types outside every aggregate whose methods take or return one — repositories, domain services, policies. Drawn beside the aggregates they work on, behind a toggle since there are usually more of them than aggregates |
 | Constants | Typed constants, in declaration order, since that order usually carries meaning. The literal is dropped when the name already says it (`ChestUpper` covers `"CHEST_UPPER"`) |
 
 `//ddd:id for=Order` states the pairing when naming departs from the convention.

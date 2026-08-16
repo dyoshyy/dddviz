@@ -310,30 +310,50 @@
       "via": "Order.customer CustomerID"
     }
   ],
-  "unclassified": [
-    {
-      "name": "OrderStore",
-      "pkg": "example.com/basic",
-      "pos": "shop.go:158",
-      "kind": "interface",
-      "touches": [
-        "Order"
-      ]
-    },
-    {
-      "name": "PlaceOrderRequest",
-      "pkg": "example.com/basic",
-      "pos": "shop.go:164",
-      "kind": "data"
-    },
+  "services": [
     {
       "name": "OrderPricer",
       "pkg": "example.com/basic",
       "pos": "shop.go:152",
       "kind": "service",
+      "doc": "OrderPricer belongs to no aggregate, but it works on one. What it touches\nplaces it better than its shape does.",
       "touches": [
         "Order"
+      ],
+      "methods": [
+        {
+          "name": "Total",
+          "signature": "(o *Order) Money"
+        }
       ]
+    },
+    {
+      "name": "OrderStore",
+      "pkg": "example.com/basic",
+      "pos": "shop.go:158",
+      "kind": "interface",
+      "doc": "OrderStore is a port, whose methods live on the interface rather than on\nthe named type.",
+      "touches": [
+        "Order"
+      ],
+      "methods": [
+        {
+          "name": "Find",
+          "signature": "(id OrderID) (*Order, error)"
+        },
+        {
+          "name": "Save",
+          "signature": "(o *Order) error"
+        }
+      ]
+    }
+  ],
+  "unclassified": [
+    {
+      "name": "PlaceOrderRequest",
+      "pkg": "example.com/basic",
+      "pos": "shop.go:164",
+      "kind": "data"
     },
     {
       "name": "PricingService",

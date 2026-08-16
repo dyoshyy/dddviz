@@ -6,9 +6,12 @@ package model
 
 // Graph is the aggregate structure of everything that was analyzed.
 type Graph struct {
-	Meta         Meta           `json:"meta"`
-	Aggregates   []Aggregate    `json:"aggregates"`
-	References   []Reference    `json:"references"`
+	Meta       Meta        `json:"meta"`
+	Aggregates []Aggregate `json:"aggregates"`
+	References []Reference `json:"references"`
+	// Services are the types outside every aggregate that work on one.
+	// They are drawn beside the aggregates rather than listed as leftovers.
+	Services     []Service      `json:"services,omitempty"`
 	Unclassified []Unclassified `json:"unclassified"`
 	// UnclassifiedTotal counts every unclassified type, including the ones
 	// folded into Members. The top-level list is short by design; this keeps
@@ -161,6 +164,23 @@ const (
 	// KindOther is everything else, and the group worth reading.
 	KindOther UnclassifiedKind = "other"
 )
+
+// Service is a type that belongs to no aggregate but operates on one.
+//
+// Domain services, policies and repository ports all land here. What
+// separates them from stray types is not their shape -- a policy object
+// holding configuration looks like any other struct -- but the fact that
+// their methods take or return an aggregate.
+type Service struct {
+	Name string           `json:"name"`
+	Pkg  string           `json:"pkg"`
+	Pos  string           `json:"pos"`
+	Kind UnclassifiedKind `json:"kind"`
+	Doc  string           `json:"doc,omitempty"`
+	// Touches names the aggregates this type works on.
+	Touches []string `json:"touches"`
+	Methods []Method `json:"methods,omitempty"`
+}
 
 // Unclassified is a type that no aggregate root can reach.
 //

@@ -162,6 +162,24 @@ export function bodyWidth(t: BoxLike): number {
   return w;
 }
 
+/**
+ * A service box stays small on purpose.
+ *
+ * These sit around the aggregates and there are many of them; showing their
+ * full contents would bury the thing the diagram is about. The name, what
+ * kind of thing it is, and one line of doc is enough to recognise it.
+ */
+export function serviceSize(s: {
+  name: string;
+  kind: string;
+  doc?: string;
+}): { width: number; height: number } {
+  const title = (s.name.length + s.kind.length + 3) * TITLE_CHAR;
+  const width = Math.max(MIN_W, Math.ceil(title) + PAD * 2);
+  const height = HEAD + (s.doc ? DOC_ROW + 2 : 0) + 8;
+  return { width, height };
+}
+
 export function memberSize(m: Member): { width: number; height: number } {
   const title = (m.name.length + m.kind.length + 3) * TITLE_CHAR;
   const width = Math.max(MIN_W, Math.ceil(Math.max(title, bodyWidth(m)) + PAD * 2));

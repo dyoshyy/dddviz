@@ -9,8 +9,13 @@
 // which is exactly what dagre is for.
 
 import dagre from "@dagrejs/dagre";
-import type { Aggregate, Graph, Member } from "./model";
-import { aggCollapsedSize, aggHeadHeight, memberSize } from "./measure";
+import type { Aggregate, Graph, Member, Service } from "./model";
+import {
+  aggCollapsedSize,
+  aggHeadHeight,
+  memberSize,
+  serviceSize,
+} from "./measure";
 
 export interface PlacedMember {
   member: Member;
@@ -30,10 +35,20 @@ export interface PlacedAggregate {
   members: PlacedMember[];
 }
 
+export interface PlacedService {
+  service: Service;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 export interface PlacedEdge {
   from: string;
   to: string;
   via: string;
+  /** A service's link to what it works on, drawn differently. */
+  service?: boolean;
   points: { x: number; y: number }[];
 }
 
@@ -41,6 +56,7 @@ export interface Layout {
   width: number;
   height: number;
   aggregates: PlacedAggregate[];
+  services: PlacedService[];
   edges: PlacedEdge[];
 }
 
@@ -102,7 +118,11 @@ function packMembers(
 }
 
 /** Run the whole layout for the current expansion state. */
-export function layoutGraph(graph: Graph, expanded: Set<string>): Layout {
+export function layoutGraph(
+  graph: Graph,
+  expanded: Set<string>,
+  showServices = false
+): Layout {
   const g = new dagre.graphlib.Graph({ multigraph: true });
   g.setGraph({
     rankdir: "LR",
@@ -135,6 +155,18 @@ export function layoutGraph(graph: Graph, expanded: Set<string>): Layout {
     g.setEdge(r.from, r.to, {}, `ref${i}`);
   });
 
+  // Services rank ahead of what they work on, so they gather on the side the
+  // arrows leave from.
+  const services = showServices ? (graph.services ?? []) : [];
+  const aggNames = new Set(graph.aggregates.map((a) => a.name));
+  services.forEach((s) => {
+    const size = serviceSize(s);
+    g.setNode(svcId(s.name), { width: size.width, height: size.height });
+    s.touches.forEach((t, i) => {
+      if (aggNames.has(t)) g.setEdge(svcId(s.name), t, {}, `svc${s.name}${i}`);
+    });
+  });
+
   dagre.layout(g);
 
   // dagre reports node centres; everything downstream wants top-left.
@@ -155,6 +187,21 @@ export function layoutGraph(graph: Graph, expanded: Set<string>): Layout {
     };
   });
 
+  const placedServices: PlacedService[] = services.map((s) => {
+    const n = g.node(svcId(s.name)) as
+      | { x: number; y: number; width: number; height: number }
+      | undefined;
+    const width = n?.width ?? 0;
+    const height = n?.height ?? 0;
+    return {
+      service: s,
+      x: (n?.x ?? 0) - width / 2,
+      y: (n?.y ?? 0) - height / 2,
+      width,
+      height,
+    };
+  });
+
   const edges: PlacedEdge[] = [];
   graph.references.forEach((r, i) => {
     if (r.from === r.to) return;
@@ -170,13 +217,36 @@ export function layoutGraph(graph: Graph, expanded: Set<string>): Layout {
     });
   });
 
+  services.forEach((s) => {
+    s.touches.forEach((t, i) => {
+      if (!aggNames.has(t)) return;
+      const e = g.edge({ v: svcId(s.name), w: t, name: `svc${s.name}${i}` }) as
+        | { points?: { x: number; y: number }[] }
+        | undefined;
+      if (!e?.points?.length) return;
+      edges.push({
+        from: svcId(s.name),
+        to: t,
+        via: "",
+        service: true,
+        points: orthogonal(e.points),
+      });
+    });
+  });
+
   const gl = g.graph() as { width?: number; height?: number };
   return {
     width: gl.width ?? 0,
     height: gl.height ?? 0,
     aggregates,
+    services: placedServices,
     edges,
   };
+}
+
+/** Service node ids are prefixed so they cannot collide with a type name. */
+function svcId(name: string): string {
+  return `svc:${name}`;
 }
 
 /**

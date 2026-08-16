@@ -1,7 +1,7 @@
 // Drawing. Takes placed boxes from the layout and produces SVG.
 
 import type { BoxLike, Member } from "./model";
-import type { Layout, PlacedAggregate } from "./layout";
+import type { Layout, PlacedAggregate, PlacedService } from "./layout";
 import {
   CHAR,
   DOC_ROW,
@@ -266,11 +266,46 @@ function bodyHeightOf(t: BoxLike, boxWidth: number): number {
   return h;
 }
 
+/** A service box: enough to recognise it, not enough to crowd the diagram. */
+function drawService(parent: Element, p: PlacedService): SVGGElement {
+  const s = p.service;
+  const g = el(
+    "g",
+    {
+      class: `service node ${s.kind}`,
+      transform: `translate(${p.x},${p.y})`,
+      "data-service": s.name,
+      "data-touches": s.touches.join(","),
+    },
+    parent
+  );
+
+  el("rect", { width: p.width, height: p.height }, g);
+  text(g, PAD, 16, "service-title", s.name);
+  const badge = text(g, p.width - PAD, 16, "badge", s.kind.toUpperCase());
+  badge.setAttribute("text-anchor", "end");
+
+  if (s.doc) {
+    const d = text(g, PAD, HEAD + 8, "doc", docLine(s.doc, boxChars(p.width)));
+    el("title", {}, d).textContent = s.doc;
+  }
+  if (s.methods?.length) {
+    el("title", {}, g).textContent = s.methods
+      .map((m) => m.name + m.signature)
+      .join("\n");
+  }
+  return g;
+}
+
 function drawEdges(parent: Element, layout: Layout): void {
   for (const e of layout.edges) {
     const g = el(
       "g",
-      { class: "edge", "data-from": e.from, "data-to": e.to },
+      {
+        class: e.service ? "edge service-edge" : "edge",
+        "data-from": e.from,
+        "data-to": e.to,
+      },
       parent
     );
 
@@ -311,6 +346,7 @@ export function render(stage: HTMLElement, layout: Layout): SVGSVGElement {
 
   // Edges first, so they sit under the boxes.
   drawEdges(camera, layout);
+  for (const p of layout.services) drawService(camera, p);
   for (const p of layout.aggregates) drawAggregate(camera, p);
 
   return svg;

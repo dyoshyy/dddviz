@@ -109,6 +109,8 @@ function unclassifiedSection(graph: Graph): string {
 export interface SideHandlers {
   onExpandAll: () => void;
   onCollapseAll: () => void;
+  onToggleServices: () => void;
+  servicesShown: boolean;
   onHighlight: (aggregate: string | null) => void;
 }
 
@@ -137,6 +139,33 @@ export function buildSide(
       "</div>";
   }
 
+  const services = graph.services ?? [];
+  if (services.length) {
+    html +=
+      `<h2>Services ${services.length}</h2>` +
+      `<div class="group-note">Types outside every aggregate whose methods ` +
+      `take or return one — repositories, domain services, policies.</div>` +
+      `<div class="hint" style="margin-bottom:8px">` +
+      `<button class="link" id="toggle-services">` +
+      (handlers.servicesShown ? "Hide in diagram" : "Show in diagram") +
+      `</button></div>`;
+
+    let lastAgg: string | null = null;
+    for (const s of services) {
+      const head = s.touches[0] ?? "";
+      if (head !== lastAgg) {
+        lastAgg = head;
+        html +=
+          `<div class="svc-group"><span class="touch" data-agg="${escapeHtml(head)}">` +
+          `${escapeHtml(head)}</span></div>`;
+      }
+      html +=
+        `<div class="unc"><b>${escapeHtml(s.name)}</b> ` +
+        `<span class="tag">${escapeHtml(s.kind)}</span><br>` +
+        `<span class="pos">${escapeHtml(s.pos)}</span></div>`;
+    }
+  }
+
   html += unclassifiedSection(graph);
   side.innerHTML = html;
 
@@ -147,6 +176,10 @@ export function buildSide(
     );
     el.addEventListener("mouseleave", () => handlers.onHighlight(null));
   });
+
+  document
+    .getElementById("toggle-services")
+    ?.addEventListener("click", handlers.onToggleServices);
 
   if (!aggCount) return;
   document.getElementById("all-open")?.addEventListener("click", handlers.onExpandAll);

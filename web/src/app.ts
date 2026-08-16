@@ -21,6 +21,10 @@ let lastLayout: Layout | null = null;
 // whole-diagram actions refit.
 let refit = true;
 
+// Services are off by default: the diagram is about the aggregates, and
+// there are usually more services than aggregates.
+let showServices = false;
+
 // ---- viewport ---------------------------------------------------------
 
 function applyView(): void {
@@ -51,7 +55,7 @@ function draw(): void {
     return;
   }
 
-  const layout = layoutGraph(graph, expanded);
+  const layout = layoutGraph(graph, expanded, showServices);
   const svg = render(stage, layout);
   lastLayout = layout;
 
@@ -239,6 +243,12 @@ function renderSide(): void {
       expanded.clear();
       rebuild(true);
     },
+    onToggleServices: () => {
+      showServices = !showServices;
+      renderSide();
+      rebuild(true);
+    },
+    servicesShown: showServices,
     onHighlight: (name) => {
       const svg = stage.querySelector("svg");
       if (!svg) return;

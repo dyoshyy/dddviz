@@ -366,3 +366,26 @@ button.link {
   opacity: 0.75;
 }
 #side .touch:hover { opacity: 1; }
+
+/* --- services --- */
+
+.service > rect {
+  fill: var(--panel);
+  stroke: var(--ink-dim);
+  stroke-width: 1;
+  stroke-dasharray: 3 2;
+  rx: 4;
+}
+.service.interface > rect { stroke: var(--entity-line); }
+.service-title {
+  font: 600 12px ui-sans-serif, system-ui, sans-serif;
+  fill: var(--ink);
+}
+.edge.service-edge path {
+  stroke-dasharray: 4 3;
+  opacity: 0.65;
+}
+
+#side .svc-group {
+  margin: 10px 0 3px;
+}

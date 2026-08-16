@@ -97,10 +97,21 @@ export interface Meta {
   packages: string[];
 }
 
+export interface Service {
+  name: string;
+  pkg: string;
+  pos: string;
+  kind: UnclassifiedKind;
+  doc?: string;
+  touches: string[];
+  methods?: Method[];
+}
+
 export interface Graph {
   meta: Meta;
   aggregates: Aggregate[];
   references: Reference[];
+  services?: Service[];
   unclassified: Unclassified[];
   unclassifiedTotal?: number;
   candidates?: Candidate[];

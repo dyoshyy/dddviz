@@ -571,7 +571,7 @@ func (a *analyzer) build() *model.Graph {
 		g.References = append(g.References, refs...)
 	}
 
-	g.Unclassified = a.unclassified(reached)
+	g.Services, g.Unclassified = a.outside(reached)
 	for key, d := range a.types {
 		if !d.isAggregate && !reached[key] && !a.identity[key] {
 			g.UnclassifiedTotal++
@@ -600,7 +600,7 @@ func (a *analyzer) build() *model.Graph {
 //
 // A domain service that drags in six helpers should read as one entry, not
 // as seven equal names in a flat list.
-func (a *analyzer) unclassified(reached map[string]bool) []model.Unclassified {
+func (a *analyzer) outside(reached map[string]bool) ([]model.Service, []model.Unclassified) {
 	set := map[string]*declared{}
 	for key, d := range a.types {
 		if d.isAggregate || reached[key] || a.identity[key] {
@@ -608,8 +608,36 @@ func (a *analyzer) unclassified(reached map[string]bool) []model.Unclassified {
 		}
 		set[key] = d
 	}
+
+	// A type whose methods take or return an aggregate is doing work on the
+	// domain, so it is drawn beside the aggregates rather than left in a
+	// list of things that did not fit.
+	var services []model.Service
+	for key, d := range set {
+		touches := a.touches(d)
+		if len(touches) == 0 {
+			continue
+		}
+		services = append(services, model.Service{
+			Name:    d.name,
+			Pkg:     d.pkgPath,
+			Pos:     shortPos(d.pos),
+			Kind:    classifyUnclassified(d),
+			Doc:     d.doc,
+			Touches: touches,
+			Methods: a.methodsOf(d),
+		})
+		delete(set, key)
+	}
+	sort.Slice(services, func(i, j int) bool {
+		if services[i].Touches[0] != services[j].Touches[0] {
+			return services[i].Touches[0] < services[j].Touches[0]
+		}
+		return services[i].Name < services[j].Name
+	})
+
 	if len(set) == 0 {
-		return []model.Unclassified{}
+		return services, []model.Unclassified{}
 	}
 
 	// Reachability among the unclassified types only.
@@ -666,7 +694,7 @@ func (a *analyzer) unclassified(reached map[string]bool) []model.Unclassified {
 		}
 		return out[i].Name < out[j].Name
 	})
-	return out
+	return services, out
 }
 
 // foldUnclassified walks out from one entry, collecting what it reaches.
