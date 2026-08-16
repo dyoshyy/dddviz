@@ -236,20 +236,12 @@ func (a *analyzer) build() *model.Graph {
 		g.References = append(g.References, refs...)
 	}
 
+	g.Unclassified = a.unclassified(reached)
 	for key, d := range a.types {
-		if d.isAggregate || reached[key] {
-			continue
+		if !d.isAggregate && !reached[key] && !a.identity[key] {
+			g.UnclassifiedTotal++
 		}
-		if a.identity[key] {
-			continue
-		}
-		g.Unclassified = append(g.Unclassified, model.Unclassified{
-			Name: d.name,
-			Pkg:  d.pkgPath,
-			Pos:  shortPos(d.pos),
-		})
 	}
-
 	g.Candidates = a.candidates()
 
 	sort.Slice(g.Aggregates, func(i, j int) bool { return g.Aggregates[i].Name < g.Aggregates[j].Name })
@@ -263,8 +255,176 @@ func (a *analyzer) build() *model.Graph {
 		}
 		return x.Via < y.Via
 	})
-	sort.Slice(g.Unclassified, func(i, j int) bool { return g.Unclassified[i].Name < g.Unclassified[j].Name })
+	// g.Unclassified is already ordered by group and then by name.
 	return g
+}
+
+// unclassified collects the types no aggregate can reach, groups them by
+// what their structure says about them, and folds each one's own reachable
+// types underneath it.
+//
+// A domain service that drags in six helpers should read as one entry, not
+// as seven equal names in a flat list.
+func (a *analyzer) unclassified(reached map[string]bool) []model.Unclassified {
+	set := map[string]*declared{}
+	for key, d := range a.types {
+		if d.isAggregate || reached[key] || a.identity[key] {
+			continue
+		}
+		set[key] = d
+	}
+	if len(set) == 0 {
+		return []model.Unclassified{}
+	}
+
+	// Reachability among the unclassified types only.
+	edges := map[string][]string{}
+	referenced := map[string]bool{}
+	for key, d := range set {
+		seen := map[string]bool{key: true}
+		for _, f := range structFields(d.named) {
+			for _, t := range a.namedTargets(f.Type()) {
+				k := t.key()
+				if _, ok := set[k]; !ok || seen[k] {
+					continue
+				}
+				seen[k] = true
+				edges[key] = append(edges[key], k)
+				referenced[k] = true
+			}
+		}
+	}
+
+	tops := make([]string, 0, len(set))
+	for key := range set {
+		if !referenced[key] {
+			tops = append(tops, key)
+		}
+	}
+	sort.Strings(tops)
+
+	out := make([]model.Unclassified, 0, len(tops))
+	covered := map[string]bool{}
+	for _, key := range tops {
+		out = append(out, a.foldUnclassified(key, set, edges, covered))
+	}
+
+	// Types caught in a cycle are referenced by something, yet nothing
+	// outside the cycle reaches them. Surface them rather than lose them.
+	var orphans []string
+	for key := range set {
+		if !covered[key] {
+			orphans = append(orphans, key)
+		}
+	}
+	sort.Strings(orphans)
+	for _, key := range orphans {
+		if covered[key] {
+			continue // an earlier orphan already pulled this one in
+		}
+		out = append(out, a.foldUnclassified(key, set, edges, covered))
+	}
+
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Kind != out[j].Kind {
+			return kindOrder(out[i].Kind) < kindOrder(out[j].Kind)
+		}
+		return out[i].Name < out[j].Name
+	})
+	return out
+}
+
+// foldUnclassified walks out from one entry, collecting what it reaches.
+func (a *analyzer) foldUnclassified(
+	key string,
+	set map[string]*declared,
+	edges map[string][]string,
+	covered map[string]bool,
+) model.Unclassified {
+	root := set[key]
+	covered[key] = true
+
+	entry := model.Unclassified{
+		Name: root.name,
+		Pkg:  root.pkgPath,
+		Pos:  shortPos(root.pos),
+		Kind: classifyUnclassified(root),
+	}
+
+	seen := map[string]bool{key: true}
+	type item struct {
+		key   string
+		depth int
+	}
+	queue := []item{{key: key, depth: 0}}
+
+	for len(queue) > 0 {
+		cur := queue[0]
+		queue = queue[1:]
+		for _, next := range edges[cur.key] {
+			if seen[next] {
+				continue
+			}
+			seen[next] = true
+			covered[next] = true
+
+			d := set[next]
+			entry.Members = append(entry.Members, model.UnclassifiedRef{
+				Name:  d.name,
+				Pkg:   d.pkgPath,
+				Pos:   shortPos(d.pos),
+				Kind:  classifyUnclassified(d),
+				Depth: cur.depth + 1,
+			})
+			queue = append(queue, item{key: next, depth: cur.depth + 1})
+		}
+	}
+
+	sort.Slice(entry.Members, func(i, j int) bool {
+		if entry.Members[i].Depth != entry.Members[j].Depth {
+			return entry.Members[i].Depth < entry.Members[j].Depth
+		}
+		return entry.Members[i].Name < entry.Members[j].Name
+	})
+	return entry
+}
+
+// classifyUnclassified reads a type's structure. It says nothing about
+// intent — only about what the type system already states.
+func classifyUnclassified(d *declared) model.UnclassifiedKind {
+	switch u := d.named.Underlying().(type) {
+	case *types.Interface:
+		return model.KindInterface
+	case *types.Struct:
+		if u.NumFields() == 0 {
+			return model.KindService
+		}
+		for i := 0; i < u.NumFields(); i++ {
+			if !u.Field(i).Exported() {
+				return model.KindOther
+			}
+		}
+		return model.KindData
+	default:
+		return model.KindValue
+	}
+}
+
+// kindOrder puts the groups a reader can dismiss first and the group worth
+// reading last.
+func kindOrder(k model.UnclassifiedKind) int {
+	switch k {
+	case model.KindInterface:
+		return 0
+	case model.KindData:
+		return 1
+	case model.KindService:
+		return 2
+	case model.KindValue:
+		return 3
+	default:
+		return 4
+	}
 }
 
 // candidates suggests where a //ddd:aggregate marker might go, for someone

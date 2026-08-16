@@ -493,18 +493,7 @@
         "</div>";
     }
 
-    if (graph.unclassified.length) {
-      html +=
-        "<h2>Unclassified " + graph.unclassified.length + "</h2><ul>" +
-        graph.unclassified
-          .map(function (u) {
-            return "<li><b>" + escapeHtml(u.name) + "</b><br>" + escapeHtml(u.pos) + "</li>";
-          })
-          .join("") +
-        "</ul>" +
-        '<div class="hint" style="margin-top:8px">Types no aggregate root can reach. ' +
-        "Usually domain services and DTOs, but a forgotten marker shows up here too.</div>";
-    }
+    html += buildUnclassified();
 
     side.innerHTML = html;
     if (!aggCount) return;
@@ -520,6 +509,80 @@
       refit = true;
       layout();
     });
+  }
+
+  // What each structural group means, in one line. The groups exist so a
+  // reader can dismiss most of the list and look hard at "other".
+  var KIND_LABEL = {
+    interface: "Interfaces",
+    data: "Data types",
+    service: "Services",
+    value: "Values",
+    other: "Other",
+  };
+  var KIND_NOTE = {
+    interface: "Ports and repositories. Implemented elsewhere, so no aggregate holds them.",
+    data: "Every field exported — the shape of something filled in from outside.",
+    service: "No fields at all, so these can only be behaviour.",
+    value: "Named types over something other than a struct, reached by no aggregate.",
+    other: "Structs that fit none of the above. A forgotten marker would be here.",
+  };
+
+  function buildUnclassified() {
+    var list = graph.unclassified || [];
+    if (!list.length) return "";
+
+    var total = graph.unclassifiedTotal || list.length;
+    var head = "<h2>Unclassified " + list.length + "</h2>";
+    if (total > list.length) {
+      head +=
+        '<div class="hint" style="margin:-4px 0 10px">' +
+        plural(total, "type") + ", folded into " + list.length + " entries</div>";
+    }
+
+    // Entries arrive grouped by kind already.
+    var out = head;
+    var current = null;
+    list.forEach(function (u) {
+      if (u.kind !== current) {
+        current = u.kind;
+        out +=
+          '<h3 class="group">' + escapeHtml(KIND_LABEL[current] || current) + "</h3>" +
+          '<div class="group-note">' + escapeHtml(KIND_NOTE[current] || "") + "</div>";
+      }
+      out += unclassifiedEntry(u);
+    });
+
+    out +=
+      '<div class="hint" style="margin-top:14px">Types no aggregate root can reach. ' +
+      "Most are meant to be here; a missing <code>//ddd:aggregate</code> would be too.</div>";
+    return out;
+  }
+
+  function unclassifiedEntry(u) {
+    var name = "<b>" + escapeHtml(u.name) + "</b>";
+    var pos = "<span class=\"pos\">" + escapeHtml(u.pos) + "</span>";
+
+    if (!u.members || !u.members.length) {
+      return '<div class="unc">' + name + "<br>" + pos + "</div>";
+    }
+
+    var rows = u.members
+      .map(function (m) {
+        return (
+          '<div class="unc-child" style="padding-left:' + (m.depth * 10) + 'px">' +
+          escapeHtml(m.name) +
+          ' <span class="tag">' + escapeHtml(m.kind) + "</span><br>" +
+          '<span class="pos">' + escapeHtml(m.pos) + "</span></div>"
+        );
+      })
+      .join("");
+
+    return (
+      '<details class="unc"><summary>' +
+      name + ' <span class="count">+' + u.members.length + "</span><br>" + pos +
+      "</summary>" + rows + "</details>"
+    );
   }
 
   function plural(n, noun) {

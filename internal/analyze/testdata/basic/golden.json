@@ -154,14 +154,17 @@
     {
       "name": "PlaceOrderRequest",
       "pkg": "example.com/basic",
-      "pos": "shop.go:70"
+      "pos": "shop.go:70",
+      "kind": "data"
     },
     {
       "name": "PricingService",
       "pkg": "example.com/basic",
-      "pos": "shop.go:65"
+      "pos": "shop.go:65",
+      "kind": "service"
     }
   ],
+  "unclassifiedTotal": 2,
   "candidates": [
     {
       "name": "Shipment",

@@ -250,3 +250,70 @@ button.link {
 }
 .empty td b { color: var(--ink); font-weight: 500; }
 .empty .caveat { font-size: 11px; line-height: 1.7; margin-top: 12px; }
+
+/* --- unclassified list --- */
+
+#side h3.group {
+  font: 600 11px ui-sans-serif, system-ui, sans-serif;
+  color: var(--ink);
+  margin: 16px 0 2px;
+  text-transform: none;
+  letter-spacing: 0;
+}
+#side .group-note {
+  font-size: 10px;
+  line-height: 1.5;
+  color: var(--ink-dim);
+  margin-bottom: 6px;
+}
+
+#side .unc {
+  font: 11px ui-monospace, monospace;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--line);
+  color: var(--ink-dim);
+}
+#side .unc b { color: var(--ink); font-weight: 500; }
+#side .unc .pos { color: var(--ink-dim); }
+
+#side details.unc > summary {
+  cursor: pointer;
+  list-style: none;
+}
+#side details.unc > summary::-webkit-details-marker { display: none; }
+#side details.unc > summary::before {
+  content: "\25b8";
+  display: inline-block;
+  width: 11px;
+  color: var(--ink-dim);
+  transition: transform 0.12s;
+}
+#side details.unc[open] > summary::before { transform: rotate(90deg); }
+#side details.unc > summary b { margin-left: -0px; }
+
+#side .count {
+  color: var(--accent);
+  font-size: 10px;
+}
+
+#side .unc-child {
+  margin: 3px 0 0 11px;
+  padding-top: 3px;
+  border-top: 1px dotted var(--line);
+  color: var(--ink);
+}
+#side .unc-child .pos { color: var(--ink-dim); }
+#side .tag {
+  font-size: 9px;
+  color: var(--ink-dim);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 0 3px;
+}
+
+#side code {
+  font: 10px ui-monospace, monospace;
+  background: var(--agg-head);
+  padding: 1px 3px;
+  border-radius: 3px;
+}

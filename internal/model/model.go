@@ -10,6 +10,10 @@ type Graph struct {
 	Aggregates   []Aggregate    `json:"aggregates"`
 	References   []Reference    `json:"references"`
 	Unclassified []Unclassified `json:"unclassified"`
+	// UnclassifiedTotal counts every unclassified type, including the ones
+	// folded into Members. The top-level list is short by design; this keeps
+	// the full size visible.
+	UnclassifiedTotal int `json:"unclassifiedTotal"`
 	// Candidates are unmarked types that own an identifier type.
 	//
 	// Owning an ID is too weak to decide what an aggregate root is — that
@@ -84,12 +88,48 @@ type Reference struct {
 	Via string `json:"via"`
 }
 
+// UnclassifiedKind is what a type's structure says about it.
+//
+// These come from the type system rather than from guesswork about intent.
+// An interface is an interface; a struct with no fields has no state to
+// carry. Naming them lets a reader dismiss whole groups at a glance and
+// spend attention on KindOther, where the surprises are.
+type UnclassifiedKind string
+
+const (
+	// KindInterface is an interface — typically a port or repository.
+	KindInterface UnclassifiedKind = "interface"
+	// KindService is a struct with no fields, which can only be behaviour.
+	KindService UnclassifiedKind = "service"
+	// KindData is a struct whose fields are all exported, the shape of a
+	// type meant to be filled in from outside.
+	KindData UnclassifiedKind = "data"
+	// KindValue is a named type over something other than a struct.
+	KindValue UnclassifiedKind = "value"
+	// KindOther is everything else, and the group worth reading.
+	KindOther UnclassifiedKind = "other"
+)
+
 // Unclassified is a type that no aggregate root can reach.
 //
-// Most are domain services or DTOs and perfectly fine, but a forgotten
-// //ddd:aggregate marker shows up here too.
+// Only types that nothing else unclassified reaches appear at the top
+// level; the rest are folded into Members. A domain service pulling in six
+// helpers should read as one entry, not seven.
 type Unclassified struct {
-	Name string `json:"name"`
-	Pkg  string `json:"pkg"`
-	Pos  string `json:"pos"`
+	Name string           `json:"name"`
+	Pkg  string           `json:"pkg"`
+	Pos  string           `json:"pos"`
+	Kind UnclassifiedKind `json:"kind"`
+	// Members are the unclassified types reachable from this one.
+	Members []UnclassifiedRef `json:"members,omitempty"`
+}
+
+// UnclassifiedRef is an unclassified type folded under another one.
+type UnclassifiedRef struct {
+	Name string           `json:"name"`
+	Pkg  string           `json:"pkg"`
+	Pos  string           `json:"pos"`
+	Kind UnclassifiedKind `json:"kind"`
+	// Depth is the shortest distance from the entry it is folded under.
+	Depth int `json:"depth"`
 }
