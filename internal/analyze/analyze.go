@@ -216,6 +216,7 @@ func (a *analyzer) resolveIdentityTypes() {
 
 func (a *analyzer) build() *model.Graph {
 	g := &model.Graph{
+		Meta:         a.meta(),
 		Aggregates:   []model.Aggregate{},
 		References:   []model.Reference{},
 		Unclassified: []model.Unclassified{},
@@ -257,6 +258,41 @@ func (a *analyzer) build() *model.Graph {
 	})
 	sort.Slice(g.Unclassified, func(i, j int) bool { return g.Unclassified[i].Name < g.Unclassified[j].Name })
 	return g
+}
+
+// meta は図の見出しに使う情報を組み立てる。
+// 表題は解析対象パッケージの共通接頭辞から取る。
+func (a *analyzer) meta() model.Meta {
+	pkgs := make([]string, 0, len(a.inScope))
+	for p := range a.inScope {
+		pkgs = append(pkgs, p)
+	}
+	sort.Strings(pkgs)
+
+	title := "domain"
+	if len(pkgs) == 1 {
+		title = pkgs[0]
+	} else if len(pkgs) > 1 {
+		title = commonPrefix(pkgs)
+	}
+	if i := strings.LastIndex(title, "/"); i >= 0 && i < len(title)-1 {
+		title = title[i+1:]
+	}
+	return model.Meta{Title: title, Packages: pkgs}
+}
+
+// commonPrefix はパッケージパスの共通部分をスラッシュ区切りで返す。
+func commonPrefix(paths []string) string {
+	parts := strings.Split(paths[0], "/")
+	for _, p := range paths[1:] {
+		cur := strings.Split(p, "/")
+		n := 0
+		for n < len(parts) && n < len(cur) && parts[n] == cur[n] {
+			n++
+		}
+		parts = parts[:n]
+	}
+	return strings.Join(parts, "/")
 }
 
 // buildAggregate は集約ルートから到達可能な型を幅優先でたどる。

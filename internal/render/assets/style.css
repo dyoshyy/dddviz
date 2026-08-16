@@ -1,0 +1,178 @@
+:root {
+  --bg: #fbfbfa;
+  --panel: #ffffff;
+  --ink: #1a1a1a;
+  --ink-dim: #6b6b6b;
+  --line: #d8d6d2;
+  --agg-bg: #ffffff;
+  --agg-line: #3d3a36;
+  --agg-head: #f2efea;
+  --entity-bg: #e8eef6;
+  --entity-line: #5b7fa8;
+  --vo-bg: #f4f1ec;
+  --vo-line: #b6ab99;
+  --edge: #7a736a;
+  --accent: #b4542a;
+  --dim: 0.16;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #17171a;
+    --panel: #1e1e22;
+    --ink: #e8e6e3;
+    --ink-dim: #8f8b86;
+    --line: #34343a;
+    --agg-bg: #202024;
+    --agg-line: #6e6a64;
+    --agg-head: #2a2a2f;
+    --entity-bg: #22303f;
+    --entity-line: #4d7396;
+    --vo-bg: #26251f;
+    --vo-line: #6b6355;
+    --edge: #8a8279;
+    --accent: #d97a4a;
+  }
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--ink);
+  font: 13px/1.5 ui-sans-serif, system-ui, "Helvetica Neue", sans-serif;
+  overflow: hidden;
+}
+
+#app { display: flex; height: 100%; }
+
+#stage { flex: 1; position: relative; overflow: hidden; cursor: grab; }
+#stage.dragging { cursor: grabbing; }
+#stage svg { display: block; width: 100%; height: 100%; }
+
+/* --- ノード --- */
+
+.agg > rect {
+  fill: var(--agg-bg);
+  stroke: var(--agg-line);
+  stroke-width: 1.5;
+  rx: 6;
+}
+.agg-head { fill: var(--agg-head); }
+.agg-title {
+  font: 600 13px ui-sans-serif, system-ui, sans-serif;
+  fill: var(--ink);
+}
+.agg-id {
+  font: 11px ui-monospace, monospace;
+  fill: var(--ink-dim);
+}
+
+.member > rect { stroke-width: 1; rx: 4; }
+.member.entity > rect { fill: var(--entity-bg); stroke: var(--entity-line); }
+.member.vo > rect { fill: var(--vo-bg); stroke: var(--vo-line); }
+
+.member-title {
+  font: 600 12px ui-sans-serif, system-ui, sans-serif;
+  fill: var(--ink);
+}
+.badge {
+  font: 9px ui-monospace, monospace;
+  fill: var(--ink-dim);
+  letter-spacing: 0.06em;
+}
+.field {
+  font: 11px ui-monospace, monospace;
+  fill: var(--ink-dim);
+}
+.field-name { fill: var(--ink); }
+
+.rule { stroke: var(--line); stroke-width: 1; }
+
+/* --- 辺 --- */
+
+.edge path {
+  fill: none;
+  stroke: var(--edge);
+  stroke-width: 1.5;
+}
+.edge-label {
+  font: 10px ui-monospace, monospace;
+  fill: var(--ink-dim);
+  opacity: 0;
+}
+.edge:hover .edge-label { opacity: 1; }
+.edge:hover path { stroke: var(--accent); stroke-width: 2; }
+
+/* --- ハイライト --- */
+
+svg.has-focus .fade { opacity: var(--dim); }
+.hl > rect { stroke: var(--accent) !important; stroke-width: 2 !important; }
+.edge.hl path { stroke: var(--accent); stroke-width: 2.5; }
+.edge.hl .edge-label { opacity: 1; }
+
+.agg, .member { cursor: pointer; }
+
+/* --- サイドパネル --- */
+
+#side {
+  width: 260px;
+  flex: none;
+  border-left: 1px solid var(--line);
+  background: var(--panel);
+  padding: 18px 16px;
+  overflow-y: auto;
+}
+
+#side h1 {
+  font: 600 14px ui-sans-serif, system-ui, sans-serif;
+  margin: 0 0 2px;
+}
+#side .sub {
+  color: var(--ink-dim);
+  font: 11px ui-monospace, monospace;
+  margin-bottom: 20px;
+}
+
+#side h2 {
+  font: 600 11px ui-sans-serif, system-ui, sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-dim);
+  margin: 20px 0 8px;
+}
+
+#side ul { list-style: none; margin: 0; padding: 0; }
+#side li {
+  font: 11px ui-monospace, monospace;
+  padding: 3px 0;
+  color: var(--ink-dim);
+  border-bottom: 1px solid var(--line);
+}
+#side li b { color: var(--ink); font-weight: 500; }
+
+.hint {
+  color: var(--ink-dim);
+  font-size: 11px;
+  line-height: 1.6;
+}
+.hint kbd {
+  font: 10px ui-monospace, monospace;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 1px 4px;
+  background: var(--bg);
+}
+
+button.link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--accent);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  text-decoration: underline;
+}

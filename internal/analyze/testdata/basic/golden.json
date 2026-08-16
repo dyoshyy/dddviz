@@ -1,4 +1,10 @@
 {
+  "meta": {
+    "title": "basic",
+    "packages": [
+      "example.com/basic"
+    ]
+  },
   "aggregates": [
     {
       "name": "Customer",

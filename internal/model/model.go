@@ -6,9 +6,17 @@ package model
 
 // Graph は解析対象全体の集約構造を表す。
 type Graph struct {
+	Meta         Meta           `json:"meta"`
 	Aggregates   []Aggregate    `json:"aggregates"`
 	References   []Reference    `json:"references"`
 	Unclassified []Unclassified `json:"unclassified"`
+}
+
+// Meta は図の見出しに使う情報。
+type Meta struct {
+	Title string `json:"title"`
+	// Packages は解析対象になったパッケージのパス。
+	Packages []string `json:"packages"`
 }
 
 // Aggregate は //ddd:aggregate が付いた型と、そこから到達できる中身。

@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{.Title}}</title>
+<style>
+{{.CSS}}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="stage"></div>
+  <aside id="side"></aside>
+</div>
+<script>
+{{.ELK}}
+</script>
+<script>
+window.__DDDVIZ__ = {{.Data}};
+</script>
+<script>
+{{.JS}}
+</script>
+</body>
+</html>
