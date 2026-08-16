@@ -250,6 +250,8 @@ func (a *analyzer) build() *model.Graph {
 		})
 	}
 
+	g.Candidates = a.candidates()
+
 	sort.Slice(g.Aggregates, func(i, j int) bool { return g.Aggregates[i].Name < g.Aggregates[j].Name })
 	sort.Slice(g.References, func(i, j int) bool {
 		x, y := g.References[i], g.References[j]
@@ -263,6 +265,42 @@ func (a *analyzer) build() *model.Graph {
 	})
 	sort.Slice(g.Unclassified, func(i, j int) bool { return g.Unclassified[i].Name < g.Unclassified[j].Name })
 	return g
+}
+
+// candidates suggests where a //ddd:aggregate marker might go, for someone
+// who has not marked anything yet.
+//
+// A type is suggested when a matching XID type exists and the type is not
+// already marked. This is deliberately not how roots are decided — owning an
+// ID misses roots that have none, which is why the marker exists at all —
+// but as a starting point for a first pass it saves reading every file.
+func (a *analyzer) candidates() []model.Candidate {
+	var out []model.Candidate
+
+	for _, d := range a.types {
+		if d.isAggregate {
+			continue
+		}
+		idKey := d.pkgPath + "." + d.name + "ID"
+		id, ok := a.types[idKey]
+		if !ok {
+			continue
+		}
+		// The ID has to look like an identifier, not a struct that merely
+		// ends in "ID".
+		if _, isStruct := id.named.Underlying().(*types.Struct); isStruct {
+			continue
+		}
+		out = append(out, model.Candidate{
+			Name:   d.name,
+			Pkg:    d.pkgPath,
+			Pos:    shortPos(d.pos),
+			IDType: id.name,
+		})
+	}
+
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out
 }
 
 // meta builds the information shown in the diagram's heading.

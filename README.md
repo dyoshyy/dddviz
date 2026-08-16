@@ -2,6 +2,8 @@
 
 Draw a map of the aggregates in a Go DDD codebase.
 
+![A domain layer drawn by dddviz](docs/diagram.png)
+
 > **The name is a placeholder.** It will be reconsidered once the tool has
 > been lived with for a while.
 
@@ -37,6 +39,24 @@ their contents nest inside, and ID references connect them.
 - Drag to pan, wheel to zoom, `f` to fit on screen
 
 Use `-format json` to get just the analysis.
+
+### Starting from nothing
+
+Run it before marking anything and it will say so, and point at the types
+that at least own an ID type:
+
+```console
+$ dddviz -C ~/repos/myapp ./internal/...
+
+dddviz: no aggregates found -- nothing is marked with //ddd:aggregate
+
+  Candidates, from types that own an ID type:
+    Exercise                 exercise.go:96         (ExerciseID)
+    SetLog                   set_log.go:55          (SetLogID)
+
+  Owning an ID does not make a type an aggregate root, so treat
+  these as a starting point rather than an answer.
+```
 
 ## Watching
 
@@ -106,6 +126,10 @@ can be committed straight into a repository.
 ```console
 $ go install github.com/dyoshyy/dddviz/cmd/dddviz@latest
 ```
+
+## License
+
+MIT. See [LICENSE](LICENSE).
 
 ## Status
 

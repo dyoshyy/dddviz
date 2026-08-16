@@ -10,6 +10,21 @@ type Graph struct {
 	Aggregates   []Aggregate    `json:"aggregates"`
 	References   []Reference    `json:"references"`
 	Unclassified []Unclassified `json:"unclassified"`
+	// Candidates are unmarked types that own an identifier type.
+	//
+	// Owning an ID is too weak to decide what an aggregate root is — that
+	// is exactly why the marker exists — but it is a reasonable place for
+	// someone who has not marked anything yet to start.
+	Candidates []Candidate `json:"candidates,omitempty"`
+}
+
+// Candidate is a suggested place to put a //ddd:aggregate marker.
+type Candidate struct {
+	Name string `json:"name"`
+	Pkg  string `json:"pkg"`
+	Pos  string `json:"pos"`
+	// IDType is the identifier type that prompted the suggestion.
+	IDType string `json:"idType"`
 }
 
 // Meta carries the information shown in the diagram's heading.

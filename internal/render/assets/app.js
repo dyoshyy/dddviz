@@ -414,6 +414,10 @@
   // ---- entry ----------------------------------------------------------
 
   function layout() {
+    if (!graph.aggregates.length) {
+      showGettingStarted();
+      return;
+    }
     elk
       .layout(buildElk())
       .then(render)
@@ -423,6 +427,46 @@
           String(err) +
           "</pre>";
       });
+  }
+
+  // With nothing marked there is no diagram to draw. An empty canvas reads
+  // as a broken tool, so the page explains what is missing instead.
+  function showGettingStarted() {
+    var cands = graph.candidates || [];
+    var rows = cands
+      .slice(0, 12)
+      .map(function (c) {
+        return (
+          "<tr><td><b>" + escapeHtml(c.name) + "</b></td>" +
+          "<td>" + escapeHtml(c.pos) + "</td>" +
+          "<td>" + escapeHtml(c.idType) + "</td></tr>"
+        );
+      })
+      .join("");
+
+    var html =
+      '<div class="empty">' +
+      "<h2>Nothing is marked yet</h2>" +
+      "<p>dddviz found no type marked with <code>//ddd:aggregate</code>, " +
+      "so there is no aggregate to draw.</p>" +
+      "<p>Mark an aggregate root and run again:</p>" +
+      "<pre>//ddd:aggregate\ntype Order struct {\n\tid       OrderID\n\tcustomer CustomerID\n}</pre>";
+
+    if (rows) {
+      html +=
+        "<h3>Types that own an ID type</h3>" +
+        "<table>" + rows + "</table>" +
+        "<p class=\"caveat\">Owning an ID does not make a type an aggregate root — " +
+        "roots without their own ID exist, which is why the marker is needed at all. " +
+        "Treat this as a place to start reading, not an answer.</p>";
+    } else {
+      html +=
+        '<p class="caveat">No types owning an ID type were found either, so ' +
+        "there is no list to start from here.</p>";
+    }
+
+    html += "</div>";
+    stage.innerHTML = html;
   }
 
   function buildSide() {
@@ -435,15 +479,19 @@
       '<div class="sub">' + plural(aggCount, "aggregate") +
       " / " + plural(refCount, "reference") + "</div>";
 
-    html +=
-      '<h2>Controls</h2><div class="hint">' +
-      "Click an aggregate to expand or collapse<br>" +
-      "Hover to highlight what it relates to<br>" +
-      "Drag to pan, <kbd>wheel</kbd> to zoom<br>" +
-      "<kbd>f</kbd> to fit on screen<br><br>" +
-      '<button class="link" id="all-open">Expand all</button> / ' +
-      '<button class="link" id="all-close">Collapse all</button>' +
-      "</div>";
+    // With no diagram on screen there is nothing to drive, so the controls
+    // would only be noise.
+    if (aggCount) {
+      html +=
+        '<h2>Controls</h2><div class="hint">' +
+        "Click an aggregate to expand or collapse<br>" +
+        "Hover to highlight what it relates to<br>" +
+        "Drag to pan, <kbd>wheel</kbd> to zoom<br>" +
+        "<kbd>f</kbd> to fit on screen<br><br>" +
+        '<button class="link" id="all-open">Expand all</button> / ' +
+        '<button class="link" id="all-close">Collapse all</button>' +
+        "</div>";
+    }
 
     if (graph.unclassified.length) {
       html +=
@@ -459,6 +507,7 @@
     }
 
     side.innerHTML = html;
+    if (!aggCount) return;
 
     // These act on the whole diagram, so refit after redrawing.
     document.getElementById("all-open").addEventListener("click", function () {

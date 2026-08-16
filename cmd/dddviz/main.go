@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/dyoshyy/dddviz/internal/analyze"
+	"github.com/dyoshyy/dddviz/internal/model"
 	"github.com/dyoshyy/dddviz/internal/render"
 	"github.com/dyoshyy/dddviz/internal/watch"
 )
@@ -91,8 +92,37 @@ func run() error {
 		fmt.Fprintf(os.Stderr, "wrote %s (%d aggregates, %d references, %d unclassified)\n",
 			*out, len(graph.Aggregates), len(graph.References), len(graph.Unclassified))
 	}
+	if len(graph.Aggregates) == 0 {
+		reportNoAggregates(os.Stderr, graph)
+	}
 	return nil
 }
+
+// reportNoAggregates explains an empty diagram. Nothing marked is by far the
+// most likely first run, and an empty page on its own looks like a failure.
+func reportNoAggregates(w io.Writer, graph *model.Graph) {
+	fmt.Fprintln(w, "\ndddviz: no aggregates found -- nothing is marked with //ddd:aggregate")
+
+	if len(graph.Candidates) > 0 {
+		fmt.Fprintln(w, "\n  Candidates, from types that own an ID type:")
+		for i, c := range graph.Candidates {
+			if i == maxCandidates {
+				fmt.Fprintf(w, "    ... and %d more\n", len(graph.Candidates)-maxCandidates)
+				break
+			}
+			fmt.Fprintf(w, "    %-24s %-22s (%s)\n", c.Name, c.Pos, c.IDType)
+		}
+		fmt.Fprintln(w, "\n  Owning an ID does not make a type an aggregate root, so treat")
+		fmt.Fprintln(w, "  these as a starting point rather than an answer.")
+	}
+
+	fmt.Fprintln(w, "\n  Mark an aggregate root and run again:")
+	fmt.Fprintln(w, "\n    //ddd:aggregate")
+	fmt.Fprintln(w, "    type Order struct {")
+	fmt.Fprintln(w, "")
+}
+
+const maxCandidates = 12
 
 // resolveFormat picks the output format: an explicit flag first, then the
 // output file's extension, then JSON for stdout.
