@@ -331,3 +331,11 @@ button.link {
 .method-name { fill: var(--ink); }
 .recv { fill: var(--accent); }
 .rule.dim { stroke-dasharray: 2 3; }
+
+/* --- enum values --- */
+
+.enum {
+  font: 11px ui-monospace, monospace;
+  fill: var(--accent);
+  opacity: 0.85;
+}

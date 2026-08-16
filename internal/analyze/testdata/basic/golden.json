@@ -9,13 +9,13 @@
     {
       "name": "Customer",
       "pkg": "example.com/basic",
-      "pos": "shop.go:69",
+      "pos": "shop.go:95",
       "idType": "CustomerID",
       "members": [
         {
           "name": "Money",
           "pkg": "example.com/basic",
-          "pos": "shop.go:47",
+          "pos": "shop.go:73",
           "kind": "vo",
           "fields": [
             {
@@ -79,7 +79,7 @@
         {
           "name": "Money",
           "pkg": "example.com/basic",
-          "pos": "shop.go:47",
+          "pos": "shop.go:73",
           "kind": "vo",
           "fields": [
             {
@@ -114,7 +114,7 @@
         {
           "name": "OrderLine",
           "pkg": "example.com/basic",
-          "pos": "shop.go:26",
+          "pos": "shop.go:52",
           "kind": "vo",
           "fields": [
             {
@@ -140,9 +140,32 @@
           "depth": 1
         },
         {
+          "name": "Priority",
+          "pkg": "example.com/basic",
+          "pos": "shop.go:35",
+          "kind": "vo",
+          "fields": [],
+          "values": [
+            {
+              "name": "PriorityLow",
+              "value": "1"
+            },
+            {
+              "name": "PriorityNormal",
+              "value": "5"
+            },
+            {
+              "name": "PriorityHigh",
+              "value": "9"
+            }
+          ],
+          "doc": "Priority values are numbers, so the literal says something the name does not.",
+          "depth": 1
+        },
+        {
           "name": "Shipment",
           "pkg": "example.com/basic",
-          "pos": "shop.go:37",
+          "pos": "shop.go:63",
           "kind": "entity",
           "fields": [
             {
@@ -165,9 +188,33 @@
           "depth": 1
         },
         {
+          "name": "Status",
+          "pkg": "example.com/basic",
+          "pos": "shop.go:24",
+          "kind": "vo",
+          "fields": [],
+          "values": [
+            {
+              "name": "StatusDraft"
+            },
+            {
+              "name": "StatusPlaced"
+            },
+            {
+              "name": "StatusShipped"
+            },
+            {
+              "name": "StatusVoid",
+              "doc": "StatusVoid ends the order without shipping it."
+            }
+          ],
+          "doc": "Status is what an order can be. The constants are declared out of\nalphabetical order on purpose: declaration order carries the lifecycle.",
+          "depth": 1
+        },
+        {
           "name": "Quantity",
           "pkg": "example.com/basic",
-          "pos": "shop.go:66",
+          "pos": "shop.go:92",
           "kind": "vo",
           "fields": [],
           "depth": 2
@@ -175,7 +222,7 @@
         {
           "name": "SKU",
           "pkg": "example.com/basic",
-          "pos": "shop.go:64",
+          "pos": "shop.go:90",
           "kind": "vo",
           "fields": [],
           "doc": "SKU and Quantity are value objects that wrap a primitive rather than a struct.",
@@ -202,6 +249,14 @@
         {
           "name": "total",
           "type": "Money"
+        },
+        {
+          "name": "status",
+          "type": "Status"
+        },
+        {
+          "name": "priority",
+          "type": "Priority"
         }
       ],
       "methods": [
@@ -236,13 +291,13 @@
     {
       "name": "PlaceOrderRequest",
       "pkg": "example.com/basic",
-      "pos": "shop.go:85",
+      "pos": "shop.go:111",
       "kind": "data"
     },
     {
       "name": "PricingService",
       "pkg": "example.com/basic",
-      "pos": "shop.go:80",
+      "pos": "shop.go:106",
       "kind": "service"
     }
   ],
@@ -251,7 +306,7 @@
     {
       "name": "Shipment",
       "pkg": "example.com/basic",
-      "pos": "shop.go:37",
+      "pos": "shop.go:63",
       "idType": "ShipmentID"
     }
   ]

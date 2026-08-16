@@ -13,9 +13,35 @@ type Order struct {
 	lines    []OrderLine
 	shipment *Shipment
 	total    Money
+	status   Status
+	priority Priority
 }
 
 type OrderID string
+
+// Status is what an order can be. The constants are declared out of
+// alphabetical order on purpose: declaration order carries the lifecycle.
+type Status string
+
+const (
+	StatusDraft   Status = "DRAFT"
+	StatusPlaced  Status = "PLACED"
+	StatusShipped Status = "SHIPPED"
+	// StatusVoid ends the order without shipping it.
+	StatusVoid Status = "VOID"
+)
+
+// Priority values are numbers, so the literal says something the name does not.
+type Priority int
+
+const (
+	PriorityLow    Priority = 1
+	PriorityNormal Priority = 5
+	PriorityHigh   Priority = 9
+)
+
+// unexportedConst must not appear.
+const unexportedConst Status = "HIDDEN"
 
 // ID identifies the order.
 func (o *Order) ID() OrderID        { return o.id }

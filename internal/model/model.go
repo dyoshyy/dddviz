@@ -51,6 +51,9 @@ type Aggregate struct {
 	Fields []Field `json:"fields"`
 	// Methods are the root's exported methods.
 	Methods []Method `json:"methods,omitempty"`
+	// Values are the typed constants declared for this type, in the order
+	// they are declared.
+	Values []EnumValue `json:"values,omitempty"`
 	// Doc is the type's doc comment, with any //ddd: markers removed.
 	Doc string `json:"doc,omitempty"`
 }
@@ -69,13 +72,14 @@ const (
 // Sharing one node would draw edges across boundaries and blur the very
 // thing the diagram is about.
 type Member struct {
-	Name    string   `json:"name"`
-	Pkg     string   `json:"pkg"`
-	Pos     string   `json:"pos"`
-	Kind    Kind     `json:"kind"`
-	Fields  []Field  `json:"fields"`
-	Methods []Method `json:"methods,omitempty"`
-	Doc     string   `json:"doc,omitempty"`
+	Name    string      `json:"name"`
+	Pkg     string      `json:"pkg"`
+	Pos     string      `json:"pos"`
+	Kind    Kind        `json:"kind"`
+	Fields  []Field     `json:"fields"`
+	Methods []Method    `json:"methods,omitempty"`
+	Values  []EnumValue `json:"values,omitempty"`
+	Doc     string      `json:"doc,omitempty"`
 	// Depth is the shortest distance from the root. 1 means a direct field.
 	Depth int `json:"depth"`
 }
@@ -84,6 +88,19 @@ type Member struct {
 type Field struct {
 	Name string `json:"name"`
 	Type string `json:"type"`
+}
+
+// EnumValue is one typed constant of a named type.
+//
+// A type like ExerciseKind is not really "a string" — it is the three
+// values it can hold, and those values are the domain's vocabulary. The
+// type name alone says nothing.
+type EnumValue struct {
+	Name string `json:"name"`
+	// Value is the literal, carried only when it differs from the constant
+	// name in more than casing and punctuation.
+	Value string `json:"value,omitempty"`
+	Doc   string `json:"doc,omitempty"`
 }
 
 // Method is an exported method, which is how the rest of the code is allowed

@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"unicode"
 
 	"golang.org/x/tools/go/packages"
 
@@ -58,6 +59,7 @@ func Load(dir string, patterns ...string) (*model.Graph, error) {
 		aggById:   map[string]string{},
 		identity:  map[string]bool{},
 		aggregate: map[string]*declared{},
+		enums:     map[string][]model.EnumValue{},
 	}
 	for _, p := range pkgs {
 		a.collect(p)
@@ -100,6 +102,8 @@ type analyzer struct {
 	identity map[string]bool
 	// aggregate maps an aggregate root's key to its declaration.
 	aggregate map[string]*declared
+	// enums maps a type key to its typed constants, in declaration order.
+	enums map[string][]model.EnumValue
 }
 
 func (a *analyzer) collect(p *packages.Package) {
@@ -108,6 +112,7 @@ func (a *analyzer) collect(p *packages.Package) {
 	markers := map[string][]string{} // type name -> marker lines
 	docs := map[string]string{}      // type name -> doc comment
 	methodDocs := map[string]map[string]string{}
+	constDocs := map[string]string{} // constant name -> doc comment
 
 	for _, syn := range p.Syntax {
 		for _, decl := range syn.Decls {
@@ -122,7 +127,31 @@ func (a *analyzer) collect(p *packages.Package) {
 				continue
 			}
 			gd, ok := decl.(*ast.GenDecl)
-			if !ok || gd.Tok != token.TYPE {
+			if !ok {
+				continue
+			}
+			if gd.Tok == token.CONST {
+				for _, spec := range gd.Specs {
+					vs, ok := spec.(*ast.ValueSpec)
+					if !ok {
+						continue
+					}
+					// A trailing comment is the usual place to explain a
+					// constant, so take it when there is no doc block.
+					doc := docText(vs.Doc)
+					if doc == "" {
+						doc = docText(vs.Comment)
+					}
+					if doc == "" {
+						continue
+					}
+					for _, n := range vs.Names {
+						constDocs[n.Name] = doc
+					}
+				}
+				continue
+			}
+			if gd.Tok != token.TYPE {
 				continue
 			}
 			for _, spec := range gd.Specs {
@@ -179,6 +208,77 @@ func (a *analyzer) collect(p *packages.Package) {
 			a.aggregate[d.key()] = d
 		}
 	}
+
+	a.collectEnums(p, constDocs)
+}
+
+// collectEnums gathers the typed constants declared for each named type.
+//
+// A type whose values are enumerated is defined as much by that list as by
+// its underlying kind, and the list is the vocabulary the domain speaks in.
+func (a *analyzer) collectEnums(p *packages.Package, docs map[string]string) {
+	scope := p.Types.Scope()
+
+	type entry struct {
+		key string
+		val model.EnumValue
+		pos token.Pos
+	}
+	var found []entry
+
+	for _, name := range scope.Names() {
+		c, ok := scope.Lookup(name).(*types.Const)
+		if !ok || !c.Exported() {
+			continue
+		}
+		named, ok := c.Type().(*types.Named)
+		if !ok || named.Obj().Pkg() == nil {
+			continue
+		}
+		if !a.inScope[named.Obj().Pkg().Path()] {
+			continue
+		}
+
+		literal := strings.Trim(c.Val().String(), `"`)
+		value := literal
+		// Carrying "CHEST_UPPER" beside ChestUpper, or "MAIN" beside
+		// KindMain, is noise. Keep the literal only when it says something
+		// the constant name does not.
+		if nameCovers(name, literal) {
+			value = ""
+		}
+
+		found = append(found, entry{
+			key: named.Obj().Pkg().Path() + "." + named.Obj().Name(),
+			val: model.EnumValue{Name: name, Value: value, Doc: docs[name]},
+			pos: c.Pos(),
+		})
+	}
+
+	// Declaration order usually carries meaning that alphabetical order loses.
+	sort.Slice(found, func(i, j int) bool { return found[i].pos < found[j].pos })
+	for _, e := range found {
+		a.enums[e.key] = append(a.enums[e.key], e.val)
+	}
+}
+
+// nameCovers reports whether a constant's name already carries its literal,
+// ignoring case and separators. ChestUpper covers "CHEST_UPPER", and
+// KindMain covers "MAIN" because Go constants often repeat the type name as
+// a prefix.
+func nameCovers(name, literal string) bool {
+	norm := func(s string) string {
+		var out []rune
+		for _, r := range s {
+			if r == '_' || r == '-' || r == ' ' {
+				continue
+			}
+			out = append(out, unicode.ToLower(r))
+		}
+		return string(out)
+	}
+	n, l := norm(name), norm(literal)
+	return l != "" && strings.Contains(n, l)
 }
 
 // receiverTypeName returns the type a method is declared on, peeling off a
@@ -573,6 +673,7 @@ func (a *analyzer) buildAggregate(root *declared, reached map[string]bool) (mode
 		Members: []model.Member{},
 		Fields:  a.fieldsOf(root),
 		Methods: a.methodsOf(root),
+		Values:  a.enums[root.key()],
 		Doc:     root.doc,
 	}
 	if key, ok := a.idTypeOf(root); ok {
@@ -627,6 +728,7 @@ func (a *analyzer) buildAggregate(root *declared, reached map[string]bool) (mode
 					Kind:    a.classify(target),
 					Fields:  a.fieldsOf(target),
 					Methods: a.methodsOf(target),
+					Values:  a.enums[key],
 					Doc:     target.doc,
 					Depth:   cur.depth + 1,
 				})

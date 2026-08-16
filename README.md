@@ -31,9 +31,14 @@ wrote docs/domain.html (3 aggregates, 2 references, 23 unclassified)
 
 The output is one HTML file with no dependencies. Aggregates become frames,
 their contents nest inside, and ID references connect them. Each box carries
-the type's doc comment, its fields, and its exported methods with their
-signatures — enough to read what a type is and how you are meant to use it
-without opening the file.
+the type's doc comment, its fields, its constants and its exported methods
+with their signatures — enough to read what a type is, what it can hold, and
+how you are meant to use it without opening the file.
+
+The constants matter more than they might seem. A type like `MuscleRegion`
+is not really "a string" — it is the twenty-one values it can hold, and
+those values are the vocabulary the domain speaks in. A diagram showing only
+the type name leaves that out entirely.
 
 - Click an aggregate to **expand or collapse** it. Collapsed, the diagram is
   a map between aggregates; expanded, it shows what is inside. These are two
@@ -110,6 +115,7 @@ infers the rest.
 | References between aggregates | A field in aggregate A holding B's ID type means A → B |
 | Unclassified | Types no aggregate root can reach. Grouped by what their structure says — interfaces, all-exported structs, fieldless structs — and folded so a service and its helpers read as one entry |
 | Methods | Exported methods with their signatures, and their doc comments on hover |
+| Constants | Typed constants, in declaration order, since that order usually carries meaning. The literal is dropped when the name already says it (`ChestUpper` covers `"CHEST_UPPER"`) |
 
 `//ddd:id for=Order` states the pairing when naming departs from the convention.
 

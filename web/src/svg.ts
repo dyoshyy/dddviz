@@ -2,7 +2,16 @@
 
 import type { BoxLike, Member } from "./model";
 import type { Layout, PlacedAggregate } from "./layout";
-import { CHAR, DOC_ROW, HEAD, PAD, ROW, docLine } from "./measure";
+import {
+  CHAR,
+  DOC_ROW,
+  HEAD,
+  PAD,
+  ROW,
+  boxChars,
+  docLine,
+  wrapValues,
+} from "./measure";
 
 const NS = "http://www.w3.org/2000/svg";
 
@@ -57,10 +66,10 @@ function drawBody(
   boxWidth: number
 ): number {
   let y = startY;
-  const boxChars = Math.floor((boxWidth - PAD * 2) / CHAR);
+  const chars = boxChars(boxWidth);
 
   if (t.doc) {
-    const d = text(g, x, y + 10, "doc", docLine(t.doc, boxChars));
+    const d = text(g, x, y + 10, "doc", docLine(t.doc, chars));
     el("title", {}, d).textContent = t.doc;
     y += DOC_ROW + 4;
   }
@@ -72,6 +81,32 @@ function drawBody(
       el("tspan", {}, line).textContent = "  " + f.type;
     });
     y += t.fields.length * ROW + 4;
+  }
+
+  // The constants come before the methods: what a type can be is read
+  // before what it can do.
+  const values = t.values ?? [];
+  if (values.length) {
+    el(
+      "line",
+      { x1: x, y1: y + 2, x2: x + boxWidth - PAD * 2, y2: y + 2, class: "rule dim" },
+      g
+    );
+    y += 4;
+
+    const lines = wrapValues(values, chars);
+    lines.forEach((content, i) => {
+      const line = row(g, x, y + 11 + i * ROW, "enum");
+      el("tspan", {}, line).textContent = content;
+    });
+
+    const withDocs = values.filter((v) => v.doc);
+    if (withDocs.length) {
+      el("title", {}, g).textContent = withDocs
+        .map((v) => `${v.name} — ${v.doc}`)
+        .join("\n");
+    }
+    y += lines.length * ROW + 4;
   }
 
   const methods = t.methods ?? [];
@@ -124,7 +159,7 @@ function drawMember(parent: Element, p: { member: Member; x: number; y: number; 
   const badge = text(g, p.width - PAD, 16, "badge", m.kind.toUpperCase());
   badge.setAttribute("text-anchor", "end");
 
-  if (m.fields.length || m.methods?.length || m.doc) {
+  if (m.fields.length || m.methods?.length || m.values?.length || m.doc) {
     el(
       "line",
       { x1: PAD, y1: HEAD - 6, x2: p.width - PAD, y2: HEAD - 6, class: "rule" },
@@ -148,7 +183,7 @@ function drawAggregate(parent: Element, p: PlacedAggregate): SVGGElement {
 
   el("rect", { width: p.width, height: p.height }, g);
 
-  const head = HEAD + bodyHeightOf(agg) + 6;
+  const head = HEAD + bodyHeightOf(agg, p.width) + 6;
   el(
     "path",
     {
@@ -180,10 +215,13 @@ function drawAggregate(parent: Element, p: PlacedAggregate): SVGGElement {
 
 // Kept local so svg.ts does not have to import the whole measure module's
 // aggregate helpers, which would be circular with layout.
-function bodyHeightOf(t: BoxLike): number {
+function bodyHeightOf(t: BoxLike, boxWidth: number): number {
   let h = 0;
   if (t.doc) h += DOC_ROW + 4;
   if (t.fields.length) h += t.fields.length * ROW + 4;
+  if (t.values?.length) {
+    h += wrapValues(t.values, boxChars(boxWidth)).length * ROW + 8;
+  }
   if (t.methods?.length) h += t.methods.length * ROW + 8;
   return h;
 }

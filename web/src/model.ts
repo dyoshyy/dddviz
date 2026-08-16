@@ -16,6 +16,12 @@ export interface Field {
   type: string;
 }
 
+export interface EnumValue {
+  name: string;
+  value?: string;
+  doc?: string;
+}
+
 export interface Method {
   name: string;
   signature: string;
@@ -30,6 +36,7 @@ export interface Member {
   kind: Kind;
   fields: Field[];
   methods?: Method[];
+  values?: EnumValue[];
   doc?: string;
   depth: number;
 }
@@ -42,6 +49,7 @@ export interface Aggregate {
   members: Member[];
   fields: Field[];
   methods?: Method[];
+  values?: EnumValue[];
   doc?: string;
 }
 
@@ -89,7 +97,7 @@ export interface Graph {
 }
 
 /** Anything drawn as a box: an aggregate root or one of its members. */
-export type BoxLike = Pick<Aggregate, "fields" | "methods" | "doc">;
+export type BoxLike = Pick<Aggregate, "fields" | "methods" | "values" | "doc">;
 
 declare global {
   interface Window {
