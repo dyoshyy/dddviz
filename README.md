@@ -118,13 +118,56 @@ your source, so it should stay neutral rather than tie the code to one tool.
 
 ## Why the page is one file
 
-elkjs is embedded in the binary, which puts the generated HTML at around
-1.6MB. Precomputing the layout would remove the need for JS, but every
-expand and collapse relayouts, so that would mean storing coordinates for
-every combination of open frames.
+The layout engine and the rendering code are bundled into the binary, which
+puts a generated page at around 90KB. Precomputing the layout would remove
+the need for JS entirely, but every expand and collapse relayouts, so that
+would mean storing coordinates for every combination of open frames.
 
 Nothing is fetched from a CDN and no stylesheet is external, so the output
-can be committed straight into a repository.
+can be committed straight into a repository without dragging anything else
+along.
+
+## Layout
+
+Layout is two different problems, so it is solved in two places.
+
+**Inside an aggregate** the members have no edges between them, so there is
+nothing for a graph engine to solve — it is rectangle packing. Packing it
+directly keeps full control of the header space a type's name, doc, fields
+and methods need.
+
+**Between aggregates** there are edges, ranks and crossings, which is what
+[dagre](https://github.com/dagrejs/dagre) is for. dagre returns splines;
+they are squared off into right-angled segments before drawing.
+
+An earlier version used elkjs, whose hierarchical layout handled both at
+once. It also weighed 1.6MB — around 17 times dagre — for capability this
+diagram never needed, since the nested half has no edges to route.
+
+## Working on the rendering code
+
+The page's JavaScript is built from TypeScript in `web/`, and the bundle is
+committed. Using dddviz needs only Go; Node is needed to change how the
+diagram is drawn, not to draw it.
+
+```console
+$ cd web && npm install
+$ npm run check     # typecheck against the model types
+$ npm run build     # or: go generate ./internal/render
+```
+
+`web/src/model.ts` mirrors `internal/model/model.go`. Change a field on the
+Go side and the typechecker will point at everything that needs updating.
+
+The figures in this README come from the same rendering code, run under
+jsdom rather than captured from a browser, so they stay sharp and stay in
+step with the tool:
+
+```console
+$ dddviz -C ~/repos/myapp -format json ./internal/... > /tmp/graph.json
+$ cd web && npm run shot -- /tmp/graph.json /tmp/diagram.svg --expand
+$ rsvg-convert -w 1500 /tmp/diagram.svg -o docs/diagram.png
+```
 
 ## Install
 

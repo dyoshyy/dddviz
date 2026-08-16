@@ -1,8 +1,12 @@
 // Package render writes a model.Graph out as a single HTML file.
 //
-// The JS, the CSS and elkjs are embedded in the binary and packed into one
+// The bundled JS and the CSS are embedded in the binary and packed into one
 // page along with the analysis JSON, so that opening the output requires
 // nothing else.
+//
+// assets/app.js is a build artifact of web/. It is committed so that using
+// dddviz needs only Go; Node is required to change the rendering code, not
+// to run it. Rebuild with `go generate ./internal/render`.
 package render
 
 import (
@@ -15,6 +19,8 @@ import (
 
 	"github.com/dyoshyy/dddviz/internal/model"
 )
+
+//go:generate sh -c "cd ../../web && npm ci --silent && npm run build"
 
 //go:embed all:assets
 var assets embed.FS
@@ -45,11 +51,6 @@ func Page(w io.Writer, graph *model.Graph, opt Options) error {
 	if err != nil {
 		return fmt.Errorf("reading JS: %w", err)
 	}
-	elk, err := assets.ReadFile("assets/elk.bundled.js")
-	if err != nil {
-		return fmt.Errorf("reading elkjs: %w", err)
-	}
-
 	// encoding/json escapes <, > and & by default, so the payload is safe
 	// to place inside a script element.
 	data, err := json.Marshal(graph)
@@ -72,7 +73,6 @@ func Page(w io.Writer, graph *model.Graph, opt Options) error {
 		"Title": title,
 		"CSS":   string(css),
 		"JS":    string(js),
-		"ELK":   string(elk),
 		"Data":  string(data),
 		"Live":  opt.Live,
 	})

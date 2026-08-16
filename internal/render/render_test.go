@@ -39,7 +39,7 @@ func TestHTML(t *testing.T) {
 		"Order", // the analysis result is embedded
 		"OrderID",
 		"PricingService",
-		"ELK",    // elkjs ships with the page
+		"dagre",  // the layout engine is bundled into the page
 		"#stage", // the stylesheet ships with the page
 	} {
 		if !strings.Contains(out, want) {
@@ -54,7 +54,13 @@ func TestHTML(t *testing.T) {
 		}
 	}
 
-	if buf.Len() < 500_000 {
-		t.Errorf("elkjs may not be embedded (%d bytes)", buf.Len())
+	// The bundle carries the layout engine and the rendering code. A page
+	// far below this size means one of them failed to embed.
+	if buf.Len() < 40_000 {
+		t.Errorf("the JS bundle may not be embedded (%d bytes)", buf.Len())
+	}
+	// And a page far above it means something heavy crept back in.
+	if buf.Len() > 300_000 {
+		t.Errorf("the page has grown unexpectedly large (%d bytes)", buf.Len())
 	}
 }
